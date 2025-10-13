@@ -5,29 +5,35 @@
   <title>Planer Światów (Web)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="styles.css" />
-  <!-- Supabase JS -->
-<!-- pod <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> -->
-<script>
-  // WPROWADŹ SWOJE WARTOŚCI ↓↓↓
-  window.SUPABASE_URL = "https://yqfclvxnljaxsqigegiy.supabase.co";
-  window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxZmNsdnhubGpheHNxaWdlZ2l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyOTMyMzYsImV4cCI6MjA3NTg2OTIzNn0.qGaoIXyfvZP3xIrcNwFIgtWh3eJDwV1AfO_xtFENGEw"; // anon public key
-</script>
 
+  <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Jeśli CDN wyżej by nie działał, użyj zamiast tego:
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  -->
+
+  <!-- 🔑 WSTAW TUTAJ SWOJE KLUCZE Z SUPABASE (Project Settings → API) -->
+  <script>
+    // UZUPEŁNIJ TE DWA POLA ↓↓↓
+    window.SUPABASE_URL = "https://yqfclvxnljaxsqigegiy.supabase.co";          // Np. https://abcdxyz.supabase.co
+    window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxZmNsdnhubGpheHNxaWdlZ2l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyOTMyMzYsImV4cCI6MjA3NTg2OTIzNn0.qGaoIXyfvZP3xIrcNwFIgtWh3eJDwV1AfO_xtFENGEw";              // Public anon key (długi JWT)
+  </script>
 </head>
 <body>
+  <!-- Pasek logowania -->
   <div id="authbar" class="topbar authbar">
-  <div class="left">
-    <strong>Status:</strong> <span id="auth-status">Nie zalogowano</span>
+    <div class="left">
+      <strong>Status:</strong> <span id="auth-status">Nie zalogowano</span>
+    </div>
+    <div class="right">
+      <input id="auth-email" type="email" placeholder="email" />
+      <button id="btn-magic">Wyślij link logowania</button>
+      <button id="btn-google">Zaloguj Google</button>
+      <button id="btn-logout" hidden>Wyloguj</button>
+    </div>
   </div>
-  <div class="right">
-    <input id="auth-email" type="email" placeholder="email" />
-    <button id="btn-magic">Wyślij link logowania</button>
-    <button id="btn-google">Zaloguj Google</button>
-    <button id="btn-logout" hidden>Wyloguj</button>
-  </div>
-</div>
 
+  <!-- Twoja dotychczasowa topbar -->
   <header class="topbar">
     <div class="left">
       <label><input id="grp-Event" type="checkbox" checked> Event</label>
@@ -41,7 +47,7 @@
       <label>Świat: <input id="world-input" type="text" /></label>
       <button id="btn-add">Dodaj</button>
       <button id="btn-del">Usuń</button>
-      <label>Ukryte: 
+      <label>Ukryte:
         <select id="hidden-select"></select>
       </label>
       <button id="btn-restore">Przywróć</button>
@@ -84,7 +90,7 @@
     <div>Epoka</div>
   </section>
 
-  <!-- Tu trafiają wiersze -->
+  <!-- Wiersze -->
   <main id="rows"></main>
 
   <!-- Masowe akcje -->
@@ -107,6 +113,7 @@
     <button id="bulk-apply">Ustaw dla widocznych</button>
   </footer>
 
+  <!-- Logika aplikacji -->
   <script src="app.js"></script>
 </body>
 </html>
