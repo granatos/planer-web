@@ -10,8 +10,8 @@ let state = {
 
 // === SUPABASE AUTH + CLOUD STORAGE ===
 // Uzupełnij wartości SUPABASE_URL i SUPABASE_ANON_KEY w pliku settings.json lub bezpośrednio tutaj.
-const SUPABASE_URL = window.SUPABASE_URL || "https://YOUR-PROJECT.supabase.co";
-const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || "YOUR-ANON-KEY";
+const SUPABASE_URL = window.SUPABASE_URL || "https://yqfclvxnljaxsqigegiy.supabase.co";
+const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxZmNsdnhubGpheHNxaWdlZ2l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyOTMyMzYsImV4cCI6MjA3NTg2OTIzNn0.qGaoIXyfvZP3xIrcNwFIgtWh3eJDwV1AfO_xtFENGEw";
 let sb = null;
 let currentUser = null;
 try {
