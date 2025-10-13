@@ -70,3 +70,9 @@ button { cursor:pointer; }
 /* bulk */
 .bulkbar { gap:10px; }
 .bulk-ctrl { margin-left:6px; }
+
+
+/* Auth bar (Supabase) */
+.authbar{background:#fffbe6;border-bottom:1px solid #f3e6a1;}
+.authbar input[type=email]{padding:6px 8px;border:1px solid #ddd;border-radius:6px;margin-right:6px;}
+.authbar button{margin-left:6px;}

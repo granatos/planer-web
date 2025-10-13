@@ -5,8 +5,22 @@
   <title>Planer Światów (Web)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="styles.css" />
+  <!-- Supabase JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+  <div id="authbar" class="topbar authbar">
+  <div class="left">
+    <strong>Status:</strong> <span id="auth-status">Nie zalogowano</span>
+  </div>
+  <div class="right">
+    <input id="auth-email" type="email" placeholder="email" />
+    <button id="btn-magic">Wyślij link logowania</button>
+    <button id="btn-google">Zaloguj Google</button>
+    <button id="btn-logout" hidden>Wyloguj</button>
+  </div>
+</div>
+
   <header class="topbar">
     <div class="left">
       <label><input id="grp-Event" type="checkbox" checked> Event</label>
