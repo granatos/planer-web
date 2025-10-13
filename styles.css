@@ -1,0 +1,72 @@
+:root{
+  --col-vis:50px; --col-world:50px;
+  --col-chk:50px; --col-nr:60px;
+  --col-trial:60px; --col-opor:60px; --col-koniec:50px;
+  --col-amount:80px; --col-packs:70px;
+  --col-nk:50px; --col-wg:80px;
+  --col-motyw:50px; --col-pr:50px;
+  --col-mapa:80px; --col-epoka:70px;
+}
+
+/* górny pasek */
+body { margin:0; font-family:system-ui, sans-serif; background:#f7fbff; }
+.topbar, .bulkbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 12px; background:#eef6ff; border-bottom:1px solid #cfe5ff; }
+.topbar .left label, .topbar .right label { margin-right:8px; white-space:nowrap; }
+button { cursor:pointer; }
+
+/* wspólna siatka kolumn (SZTYWNA) */
+.grid, #rows .row {
+  display:grid;
+  grid-template-columns:
+    var(--col-vis) var(--col-world)
+    var(--col-chk) var(--col-chk) var(--col-chk) var(--col-nr)
+    var(--col-trial) var(--col-opor) var(--col-koniec)
+    var(--col-amount) var(--col-packs) var(--col-amount) var(--col-packs)
+    var(--col-nk) var(--col-wg) var(--col-motyw) var(--col-pr)
+    var(--col-mapa) var(--col-epoka);
+  align-items:stretch;
+}
+
+/* grupy nagłówków */
+.groups { padding:6px 12px 0; column-gap:4px; }
+.groups .col { }
+.group {
+  background:#7fb0dd; color:#fff; text-align:center; padding:6px 0; font-weight:600; border-radius:4px;
+}
+.group.event { grid-column:3 / span 4; }
+.group.gpc   { grid-column:7 / span 7; }
+.group.nk    { grid-column:14 / span 1; }
+.group.wg    { grid-column:15 / span 1; }
+.group.zbiory{ grid-column:16 / span 2; }
+.group.dane  { grid-column:18 / span 2; }
+
+/* nagłówki kolumn */
+.headers { padding:4px 12px; column-gap:4px; }
+.headers > div {
+  background:#d8eaff; border:1px solid #c1dcff; text-align:center; padding:6px 4px; font-weight:600; border-radius:4px;
+}
+
+/* wiersze */
+#rows { padding:0 12px 12px; display:flex; flex-direction:column; gap:4px; }
+.row {
+  column-gap:4px;
+  background:#eaf6ff;
+  border:1px solid #cfe5ff;
+  border-radius:6px;
+  padding:4px;
+}
+.row:nth-child(even){ background:#d7ecff; }
+
+.cell { display:flex; align-items:center; justify-content:center; }
+.cell input[type="text"]{ width:100%; text-align:center; box-sizing:border-box; padding:4px; }
+.cell select{ width:100%; box-sizing:border-box; padding:4px; text-align:center; }
+.cell .badge { font-weight:600; color:#2a7b2e; } /* pakiety: zielony */
+
+.chk-green:has(input:checked),
+.chk-green input:checked { background:#c8f7c8 !important; }
+
+.hiddenRow { display:none !important; }
+
+/* bulk */
+.bulkbar { gap:10px; }
+.bulk-ctrl { margin-left:6px; }

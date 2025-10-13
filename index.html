@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <title>Planer Światów (Web)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="left">
+      <label><input id="grp-Event" type="checkbox" checked> Event</label>
+      <label><input id="grp-GPC" type="checkbox" checked> GPC</label>
+      <label><input id="grp-NK" type="checkbox" checked> NK</label>
+      <label><input id="grp-WG" type="checkbox" checked> WG</label>
+      <label><input id="grp-Zbiory" type="checkbox" checked> Zbiory</label>
+      <label><input id="grp-Dane" type="checkbox" checked> Dane świata</label>
+    </div>
+    <div class="right">
+      <label>Świat: <input id="world-input" type="text" /></label>
+      <button id="btn-add">Dodaj</button>
+      <button id="btn-del">Usuń</button>
+      <label>Ukryte: 
+        <select id="hidden-select"></select>
+      </label>
+      <button id="btn-restore">Przywróć</button>
+      <button id="btn-export">Zapisz CSV</button>
+    </div>
+  </header>
+
+  <!-- Grupy nagłówków -->
+  <section class="grid groups">
+    <div class="col col-vis"></div>
+    <div class="col col-world"></div>
+    <div class="group event">Event</div>
+    <div class="group gpc">GPC</div>
+    <div class="group nk">NK</div>
+    <div class="group wg">WG</div>
+    <div class="group zbiory">Zbiory</div>
+    <div class="group dane">Dane świata</div>
+  </section>
+
+  <!-- Nagłówki kolumn -->
+  <section class="grid headers">
+    <div>Widoczny</div>
+    <div>Świat</div>
+    <div>Zadanie dzienne</div>
+    <div>Rywal</div>
+    <div>3 plansze</div>
+    <div>nr zadania</div>
+    <div>Trial</div>
+    <div>Opór</div>
+    <div>Koniec</div>
+    <div>Srebrne</div>
+    <div>Pakiety S</div>
+    <div>Złote</div>
+    <div>Pakiety Z</div>
+    <div>NK</div>
+    <div>WG</div>
+    <div>Motywka</div>
+    <div>PR</div>
+    <div>Mapa</div>
+    <div>Epoka</div>
+  </section>
+
+  <!-- Tu trafiają wiersze -->
+  <main id="rows"></main>
+
+  <!-- Masowe akcje -->
+  <footer class="bulkbar">
+    <span>Masowo:</span>
+    <select id="bulk-target">
+      <option>WG</option>
+      <option>Motywka</option>
+      <option>PR</option>
+      <option>nr zadania</option>
+    </select>
+    <select id="bulk-wg" class="bulk-ctrl">
+      <option>1 Etap</option><option>2 Etap</option><option>3 Etap</option>
+      <option>4 Etap</option><option>5 Etap</option><option>Koniec</option>
+    </select>
+    <select id="bulk-onoff" class="bulk-ctrl" hidden>
+      <option>Zaznacz</option><option>Odznacz</option>
+    </select>
+    <input id="bulk-text" class="bulk-ctrl" type="text" hidden />
+    <button id="bulk-apply">Ustaw dla widocznych</button>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
