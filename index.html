@@ -236,6 +236,86 @@ window.addEventListener('unhandledrejection', e => {
   });
 })();
 </script>
+<script>
+(function(){
+  if (!/\bdebug=1\b/.test(location.search)) return;
+
+  function css(el, s){ el.style.cssText = s; return el; }
+  const bar = css(document.body.appendChild(document.createElement('div')),
+    'position:fixed;left:8px;bottom:8px;right:8px;z-index:2147483647;display:flex;gap:6px;flex-wrap:wrap;background:#0b0b0b;color:#cfe;padding:8px;border:1px solid #234;border-radius:8px;font:12px/1.3 monospace');
+  bar.innerHTML = `
+    <button id="dbg-diag">Diag</button>
+    <button id="dbg-save">Test zapis</button>
+    <button id="dbg-load">Załaduj</button>
+    <button id="dbg-roundtrip">Roundtrip</button>
+    <span id="dbg-out" style="margin-left:auto"></span>
+  `;
+  const out = bar.querySelector('#dbg-out');
+  const say = (t)=>{ out.textContent = t; console.log('[diag]', t); };
+
+  async function getUid(){
+    try {
+      const { data } = await (window.sb?.auth?.getSession?.() || Promise.resolve({data:null}));
+      return data?.session?.user?.id || null;
+    } catch { return null; }
+  }
+
+  async function diag(){
+    const uid = await getUid();
+    if (!uid) return say('Brak sesji/uid');
+    try {
+      const { data, error } = await window.sb.from('plans')
+        .select('updated_at')
+        .eq('user_id', uid).maybeSingle();
+      if (error) return say('Błąd SELECT: ' + error.message);
+      say('cloud.updated_at: ' + (data?.updated_at || 'brak'));
+    } catch(e){ say('Diag exc: ' + e.message); }
+  }
+
+  async function testSave(){
+    const uid = await getUid();
+    if (!uid) return say('Brak sesji/uid');
+    try {
+      window.state = window.state || {};
+      window.state.__local_changed_at = new Date().toISOString();
+      window.state.__diag = { wrote_at: window.state.__local_changed_at };
+      if (typeof window._authCloudSave === 'function') await window._authCloudSave();
+      else if (typeof window.savePlannerData === 'function') await window.savePlannerData();
+      say('Test zapis → OK');
+    } catch(e){ say('Zapis exc: ' + e.message); }
+  }
+
+  async function doLoad(){
+    const uid = await getUid();
+    if (!uid) return say('Brak sesji/uid');
+    try {
+      if (typeof window._authCloudLoad === 'function') await window._authCloudLoad();
+      else if (typeof window.loadPlannerData === 'function') await window.loadPlannerData();
+      const ts = window.state?.__cloud_synced_at || '(no cloud ts)';
+      say('Załadowano (cloud ts: ' + ts + ')');
+    } catch(e){ say('Load exc: ' + e.message); }
+  }
+
+  async function roundtrip(){
+    const ts = new Date().toISOString();
+    window.state = window.state || {};
+    window.state.__local_changed_at = ts;
+    window.state.__diag = { wrote_at: ts };
+    if (typeof window._authCloudSave === 'function') await window._authCloudSave();
+    else if (typeof window.savePlannerData === 'function') await window.savePlannerData();
+    await new Promise(r => setTimeout(r, 400));
+    if (typeof window._authCloudLoad === 'function') await window._authCloudLoad();
+    else if (typeof window.loadPlannerData === 'function') await window.loadPlannerData();
+    const got = window.state?.__diag?.wrote_at;
+    say(got === ts ? 'Roundtrip OK' : ('Roundtrip FAIL (got ' + got + ')'));
+  }
+
+  bar.querySelector('#dbg-diag').onclick = diag;
+  bar.querySelector('#dbg-save').onclick = testSave;
+  bar.querySelector('#dbg-load').onclick = doLoad;
+  bar.querySelector('#dbg-roundtrip').onclick = roundtrip;
+})();
+</script>
 
 
 </body>
