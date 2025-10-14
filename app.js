@@ -376,164 +376,109 @@ setupBulk();
 renderAll();
 setInterval(tickResets, 30 * 1000);
 
-const REDIRECT_URL = 'https://granatos.github.io/planer-web/';
 
-const authStatusEl = document.getElementById('auth-status');
-const emailEl = document.getElementById('auth-email');
-const btnMagic = document.getElementById('btn-magic');
-const btnGoogle = document.getElementById('btn-google');
-const btnLogout = document.getElementById('btn-logout');
-const btnDiscord = document.getElementById('btn-discord');
+// ===== AUTH BOOTSTRAP (compact, idempotent) =====
+(() => {
+  if (window.__AUTH_BOOT_WIRED__) return;
+  window.__AUTH_BOOT_WIRED__ = true;
 
-async function setAuthUI(user){
-  currentUser = user || null;
-  const meta = user?.user_metadata || {};
-  const label = user?.email || meta.full_name || meta.name || meta.user_name || 'Konto';
-  if (authStatusEl) authStatusEl.textContent = user ? label : 'Nie zalogowano';
-  if (btnLogout)  btnLogout.hidden  = !user;
-  if (btnMagic)   btnMagic.hidden   = !!user;
-  if (btnGoogle)  btnGoogle.hidden  = !!user;
-  if (btnDiscord) btnDiscord.hidden = !!user;
-  if (emailEl)    emailEl.hidden    = !!user;
-  if (user){
-    try { await upsertProfile?.(user); } catch(e){}
-    try { await loadPlannerData?.(); } catch(e){}
-  }
-}
+  // Stable redirect (GitHub Pages)
+  if (!window.REDIRECT_URL) window.REDIRECT_URL = 'https://granatos.github.io/planer-web/';
 
-async function upsertProfile(user){
-  try{
-    if (!sb || !user) return;
-    const nick = (user.email || '').split('@')[0] || (user.user_metadata?.user_name) || 'User';
-    await sb.from('profiles').upsert({ id: user.id, display_name: nick });
-  }catch(e){ console.warn('upsertProfile error', e); }
-}
-
-btnMagic?.addEventListener('click', async () => {
-  if (!sb) return alert('Brak konfiguracji Supabase');
-  const email = emailEl?.value?.trim();
-  if (!email) return alert('Podaj email');
-  try{
-    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: REDIRECT_URL, shouldCreateUser: true }});
-    if (error){ console.error('signInWithOtp error:', error); alert(error.message); return; }
-    alert('Wysłano link logowania.');
-  }catch(e){ console.error(e); alert('Wyjątek podczas wysyłki.'); }
-});
-
-btnGoogle?.addEventListener('click', async () => {
-  if (!sb) return alert('Brak konfiguracji Supabase');
-  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: REDIRECT_URL }});
-  if (error) alert(error.message);
-});
-
-btnDiscord?.addEventListener('click', async () => {
-  if (!sb) return alert('Brak konfiguracji Supabase');
-  const { error } = await sb.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo: REDIRECT_URL, scopes: 'identify email' }});
-  if (error) alert(error.message);
-});
-
-btnLogout?.addEventListener('click', async () => { try{ await sb?.auth?.signOut(); }catch(e){} });
-
-if (sb){
-  sb.auth.onAuthStateChange((_event, session) => setAuthUI(session?.user || null));
-  sb.auth.getSession().then(({ data }) => setAuthUI(data?.session?.user || null));
-} else {
-  setAuthUI(null);
-}
-
-document.getElementById('btn-save-cloud')?.addEventListener('click', async () => {
-  if (!currentUser) { alert('Zaloguj się, aby zapisać w chmurze'); return; }
-  try { await savePlannerData?.(); alert('Zapisano w chmurze'); }
-  catch(e){ console.error(e); alert('Błąd zapisu – sprawdź konsolę'); }
-});
-// ==== SAFE BOOTSTRAP (WKLEJ NA SAM KONIEC app.js) ====
-(function(){
-  function $id(id){ return document.getElementById(id); }
-
-  function wireAuthUI(){
-    const btnMagic   = $id('btn-magic');
-    const btnGoogle  = $id('btn-google');
-    const btnDiscord = $id('btn-discord');
-    const btnLogout  = $id('btn-logout');
-    const emailEl    = $id('auth-email');
-    const statusEl   = $id('auth-status');
-
-    // Prosty status, nawet bez Supabase:
-    function setStatus(txt){ if (statusEl) statusEl.textContent = txt; }
-
-    // Podpięcie listenerów z ochroną przed brakiem sb:
-    if (btnMagic) btnMagic.addEventListener('click', async () => {
-      try{
-        if (!window.sb) { alert('Brak konfiguracji logowania'); return; }
-        const email = (emailEl?.value || '').trim();
-        if (!email) { alert('Podaj e-mail'); return; }
-        const redirect = (typeof window.REDIRECT_URL !== 'undefined')
-          ? window.REDIRECT_URL
-          : (location.origin + '/');
-        const { error } = await window.sb.auth.signInWithOtp({
-          email,
-          options: { emailRedirectTo: redirect, shouldCreateUser: true }
-        });
-        if (error) { console.error(error); alert(error.message); return; }
-        alert('Wysłano link logowania (sprawdź skrzynkę / spam).');
-      }catch(e){ console.error(e); alert('Błąd logowania (szczegóły w konsoli).'); }
-    });
-
-    if (btnGoogle) btnGoogle.addEventListener('click', async () => {
-      try{
-        if (!window.sb) { alert('Brak konfiguracji logowania'); return; }
-        const redirect = window.REDIRECT_URL || (location.origin + '/');
-        const { error } = await window.sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: redirect }});
-        if (error) alert(error.message);
-      }catch(e){ console.error(e); alert('Błąd logowania Google.'); }
-    });
-
-    if (btnDiscord) btnDiscord.addEventListener('click', async () => {
-      try{
-        if (!window.sb) { alert('Brak konfiguracji logowania'); return; }
-        const redirect = window.REDIRECT_URL || (location.origin + '/');
-        const { error } = await window.sb.auth.signInWithOAuth({
-          provider:'discord',
-          options:{ redirectTo: redirect, scopes:'identify email' }
-        });
-        if (error) alert(error.message);
-      }catch(e){ console.error(e); alert('Błąd logowania Discord.'); }
-    });
-
-    if (btnLogout) btnLogout.addEventListener('click', async () => {
-      try{ await window.sb?.auth?.signOut(); setStatus('Nie zalogowano'); }
-      catch(e){ console.error(e); }
-    });
-
-    // Jeśli Supabase działa – pokaż realny status
-    if (window.sb) {
-      window.sb.auth.onAuthStateChange((_e, session) => {
-        const user = session?.user || null;
-        const meta = user?.user_metadata || {};
-        const label = user?.email || meta.full_name || meta.name || meta.user_name || 'Konto';
-        setStatus(user ? label : 'Nie zalogowano');
-      });
-      window.sb.auth.getSession().then(({data}) => {
-        const user = data?.session?.user || null;
-        const meta = user?.user_metadata || {};
-        const label = user?.email || meta.full_name || meta.name || meta.user_name || 'Konto';
-        setStatus(user ? label : 'Nie zalogowano');
-      });
+  // Init Supabase client safely and expose as window.sb
+  (function initSupabase(){
+    const url = window.SUPABASE_URL;
+    const key = window.SUPABASE_ANON_KEY;
+    if (typeof window.supabase === 'object' && url && key) {
+      try { window.sb = window.supabase.createClient(url, key); console.log('[supabase] client ready'); }
+      catch(e){ console.warn('[supabase] init failed', e); window.sb = null; }
     } else {
-      setStatus('Nie zalogowano'); // brak konfiguracji Supabase
+      if (typeof window.sb === 'undefined') window.sb = null;
+    }
+  })();
+
+  function $(id){ return document.getElementById(id); }
+  const emailEl   = $('auth-email');
+  const statusEl  = $('auth-status');
+  const btnMagic  = $('btn-magic');
+  const btnGoogle = $('btn-google');
+  const btnDiscord= $('btn-discord');
+  const btnLogout = $('btn-logout');
+
+  function setStatus(user){
+    const meta = user?.user_metadata || {};
+    const label = user?.email || meta.full_name || meta.name || meta.user_name || 'Konto';
+    if (statusEl) statusEl.textContent = user ? label : 'Nie zalogowano';
+    if (btnLogout)  btnLogout.hidden  = !user;
+    if (btnMagic)   btnMagic.hidden   = !!user;
+    if (btnGoogle)  btnGoogle.hidden  = !!user;
+    if (btnDiscord) btnDiscord.hidden = !!user;
+    if (emailEl)    emailEl.hidden    = !!user;
+  }
+
+  function wire(){
+    if (btnMagic && !btnMagic.dataset.wired){
+      btnMagic.dataset.wired = '1';
+      btnMagic.addEventListener('click', async () => {
+        const sb = window.sb;
+        if (!sb) return alert('Brak konfiguracji logowania');
+        const email = (emailEl?.value || '').trim();
+        if (!email) return alert('Podaj e-mail');
+        try{
+          const { error } = await sb.auth.signInWithOtp({
+            email,
+            options: { emailRedirectTo: window.REDIRECT_URL, shouldCreateUser: true }
+          });
+          if (error) { console.error(error); return alert(error.message); }
+          alert('Wysłano link logowania (sprawdź skrzynkę/spam).');
+        }catch(e){ console.error(e); alert('Błąd logowania (konsola).'); }
+      });
     }
 
-    console.log('[BOOT] Listenery podłączone:', {
+    if (btnGoogle && !btnGoogle.dataset.wired){
+      btnGoogle.dataset.wired = '1';
+      btnGoogle.addEventListener('click', async () => {
+        const sb = window.sb;
+        if (!sb) return alert('Brak konfiguracji logowania');
+        const { error } = await sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.REDIRECT_URL }});
+        if (error) alert(error.message);
+      });
+    }
+
+    if (btnDiscord && !btnDiscord.dataset.wired){
+      btnDiscord.dataset.wired = '1';
+      btnDiscord.addEventListener('click', async () => {
+        const sb = window.sb;
+        if (!sb) return alert('Brak konfiguracji logowania');
+        const { error } = await sb.auth.signInWithOAuth({
+          provider:'discord',
+          options:{ redirectTo: window.REDIRECT_URL, scopes:'identify email' }
+        });
+        if (error) alert(error.message);
+      });
+    }
+
+    if (btnLogout && !btnLogout.dataset.wired){
+      btnLogout.dataset.wired = '1';
+      btnLogout.addEventListener('click', async () => {
+        try{ await window.sb?.auth?.signOut(); setStatus(null); }catch(e){ console.error(e); }
+      });
+    }
+
+    // Session hooks
+    if (window.sb){
+      window.sb.auth.onAuthStateChange((_e, session) => setStatus(session?.user || null));
+      window.sb.auth.getSession().then(({data}) => setStatus(data?.session?.user || null));
+    } else {
+      setStatus(null);
+    }
+
+    console.log('[AUTH BOOT] wired', {
       magic: !!btnMagic, google: !!btnGoogle, discord: !!btnDiscord, logout: !!btnLogout
     });
   }
 
-  if (document.readyState === 'complete' || document.readyState === 'interactive'){
-    try { wireAuthUI(); } catch(e){ console.error('[BOOT] init error', e); }
-  } else {
-    document.addEventListener('DOMContentLoaded', () => {
-      try { wireAuthUI(); } catch(e){ console.error('[BOOT] init error', e); }
-    });
-  }
+  if (document.readyState === 'complete' || document.readyState === 'interactive') wire();
+  else document.addEventListener('DOMContentLoaded', wire);
 })();
-
+// ===== /AUTH BOOTSTRAP =====
