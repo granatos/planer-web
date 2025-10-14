@@ -1,78 +1,22 @@
-:root{
-  --col-vis:50px; --col-world:50px;
-  --col-chk:50px; --col-nr:60px;
-  --col-trial:60px; --col-opor:60px; --col-koniec:50px;
-  --col-amount:80px; --col-packs:70px;
-  --col-nk:50px; --col-wg:80px;
-  --col-motyw:50px; --col-pr:50px;
-  --col-mapa:80px; --col-epoka:70px;
+/* styles.css — minimum */
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0e0f12; color:#eef; }
+
+.topbar { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:#12141a; border-bottom:1px solid #232836; gap:8px; }
+.topbar .left, .topbar .right { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.topbar input[type=text], .topbar input[type=email], .topbar select { background:#0f1320; color:#eef; border:1px solid #2a3146; padding:6px 8px; border-radius:6px; }
+.topbar button { background:#1f6feb; color:#fff; border:0; padding:8px 10px; border-radius:8px; cursor:pointer; }
+.topbar button:hover { filter: brightness(1.1); }
+.authbar { position:sticky; top:0; z-index:10; }
+
+.grid { display:grid; grid-template-columns: 90px 160px repeat(17, minmax(100px, 1fr)); gap:6px; padding:8px 12px; }
+.groups { background:#0f1320; color:#9db4ff; border-bottom:1px solid #222a; text-transform:uppercase; letter-spacing:.05em; font-size:12px; }
+.headers { background:#0b0f1a; color:#a7b1c2; border-bottom:1px solid #222a; font-weight:600; }
+.row input[type="text"] { width:100%; background:#0e1320; color:#eef; border:1px solid #273145; padding:6px 8px; border-radius:6px; }
+
+.bulkbar { position:sticky; bottom:0; display:flex; gap:8px; align-items:center; padding:8px 12px; background:#12141a; border-top:1px solid #232836; }
+
+@media (max-width: 1200px){
+  .grid { grid-template-columns: 70px 120px repeat(17, 180px); overflow-x:auto; }
+  body { overflow-x:hidden; }
 }
-
-/* górny pasek */
-body { margin:0; font-family:system-ui, sans-serif; background:#f7fbff; }
-.topbar, .bulkbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 12px; background:#eef6ff; border-bottom:1px solid #cfe5ff; }
-.topbar .left label, .topbar .right label { margin-right:8px; white-space:nowrap; }
-button { cursor:pointer; }
-
-/* wspólna siatka kolumn (SZTYWNA) */
-.grid, #rows .row {
-  display:grid;
-  grid-template-columns:
-    var(--col-vis) var(--col-world)
-    var(--col-chk) var(--col-chk) var(--col-chk) var(--col-nr)
-    var(--col-trial) var(--col-opor) var(--col-koniec)
-    var(--col-amount) var(--col-packs) var(--col-amount) var(--col-packs)
-    var(--col-nk) var(--col-wg) var(--col-motyw) var(--col-pr)
-    var(--col-mapa) var(--col-epoka);
-  align-items:stretch;
-}
-
-/* grupy nagłówków */
-.groups { padding:6px 12px 0; column-gap:4px; }
-.groups .col { }
-.group {
-  background:#7fb0dd; color:#fff; text-align:center; padding:6px 0; font-weight:600; border-radius:4px;
-}
-.group.event { grid-column:3 / span 4; }
-.group.gpc   { grid-column:7 / span 7; }
-.group.nk    { grid-column:14 / span 1; }
-.group.wg    { grid-column:15 / span 1; }
-.group.zbiory{ grid-column:16 / span 2; }
-.group.dane  { grid-column:18 / span 2; }
-
-/* nagłówki kolumn */
-.headers { padding:4px 12px; column-gap:4px; }
-.headers > div {
-  background:#d8eaff; border:1px solid #c1dcff; text-align:center; padding:6px 4px; font-weight:600; border-radius:4px;
-}
-
-/* wiersze */
-#rows { padding:0 12px 12px; display:flex; flex-direction:column; gap:4px; }
-.row {
-  column-gap:4px;
-  background:#eaf6ff;
-  border:1px solid #cfe5ff;
-  border-radius:6px;
-  padding:4px;
-}
-.row:nth-child(even){ background:#d7ecff; }
-
-.cell { display:flex; align-items:center; justify-content:center; }
-.cell input[type="text"]{ width:100%; text-align:center; box-sizing:border-box; padding:4px; }
-.cell select{ width:100%; box-sizing:border-box; padding:4px; text-align:center; }
-.cell .badge { font-weight:600; color:#2a7b2e; } /* pakiety: zielony */
-
-.chk-green:has(input:checked),
-.chk-green input:checked { background:#c8f7c8 !important; }
-
-.hiddenRow { display:none !important; }
-
-/* bulk */
-.bulkbar { gap:10px; }
-.bulk-ctrl { margin-left:6px; }
-
-
-/* Auth bar (Supabase) */
-.authbar{background:#fffbe6;border-bottom:1px solid #f3e6a1;}
-.authbar input[type=email]{padding:6px 8px;border:1px solid #ddd;border-radius:6px;margin-right:6px;}
-.authbar button{margin-left:6px;}

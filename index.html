@@ -6,39 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Supabase JS (fallback commented below if CDN has issues) -->
+  <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- <script src="https://unpkg.com/@supabase/supabase-js@2"></script> -->
-
-  <!-- 🔑 WPROWADŹ SWOJE KLUCZE Z SUPABASE (Project Settings → API) -->
-<script>
-  window.SUPABASE_URL = "https://yqfclvxnljaxsqigegiy.supabase.co";
-  window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxZmNsdnhubGpheHNxaWdlZ2l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyOTMyMzYsImV4cCI6MjA3NTg2OTIzNn0.qGaoIXyfvZP3xIrcNwFIgtWh3eJDwV1AfO_xtFENGEw";
-</script>
-
+  <script>
+    // 🔧 UZUPEŁNIJ: Twoje dane z Supabase
+    window.SUPABASE_URL = "https://yqfclvxnljaxsqigegiy.supabase.co";
+    window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxZmNsdnhubGpheHNxaWdlZ2l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyOTMyMzYsImV4cCI6MjA3NTg2OTIzNn0.qGaoIXyfvZP3xIrcNwFIgtWh3eJDwV1AfO_xtFENGEw";
+    // Stały redirect dla OAuth (GitHub Pages)
+    window.REDIRECT_URL = "https://granatos.github.io/planer-web/";
+  </script>
 </head>
-
-<script>
-(function(){
-  const box = document.createElement('div');
-  box.style.cssText = 'position:fixed;left:8px;bottom:8px;right:8px;max-height:45vh;overflow:auto;background:#111;color:#0f0;padding:8px;font:12px/1.4 monospace;z-index:99999;opacity:.95;border-radius:8px';
-  box.id = 'logbox';
-  document.body.appendChild(box);
-  function append(prefix, args){
-    const line = document.createElement('div');
-    line.textContent = prefix + ' ' + Array.from(args).map(a => {
-      try { return typeof a==='object' ? JSON.stringify(a) : String(a); } catch(_) { return String(a); }
-    }).join(' ');
-    box.appendChild(line);
-  }
-  const _log = console.log, _warn = console.warn, _err = console.error;
-  console.log = function(){ append('[log]', arguments); _log.apply(console, arguments); };
-  console.warn = function(){ append('[warn]', arguments); _warn.apply(console, arguments); };
-  console.error = function(){ append('[err]', arguments); _err.apply(console, arguments); };
-  window.clearLog = () => box.innerHTML = '';
-})();
-</script>
-
 <body>
   <!-- Pasek logowania -->
   <div id="authbar" class="topbar authbar">
@@ -47,18 +24,14 @@
     </div>
     <div class="right">
       <input id="auth-email" type="email" placeholder="email" />
-      <button id="btn-magic">Wyślij link logowania</button>
-      <button id="btn-discord">Zaloguj Discord</button>
-      <button id="btn-google">Zaloguj Google</button>
+      <button id="btn-magic">Wyślij link</button>
+      <button id="btn-google">Google</button>
+      <button id="btn-discord">Discord</button>
       <button id="btn-logout" hidden>Wyloguj</button>
-      <button id="btn-load-cloud">Załaduj z chmury</button>
-      <button id="btn-save-cloud">Zapisz w chmurze</button>
-      <button id="btn-force-cloud">Wymuś chmurę</button>
-      <button id="btn-dbg">Diag</button>
     </div>
   </div>
 
-  <!-- GŁÓWNY HEADER APLIKACJI (pozostawiamy jak dotąd) -->
+  <!-- Główny pasek narzędzi -->
   <header class="topbar">
     <div class="left">
       <label><input id="grp-Event" type="checkbox" checked> Event</label>
@@ -72,13 +45,14 @@
       <label>Świat: <input id="world-input" type="text" /></label>
       <button id="btn-add">Dodaj</button>
       <button id="btn-del">Usuń</button>
-      <label>Ukryte: <select id="hidden-select"></select></label>
+      <label>Ukryte:
+        <select id="hidden-select"></select>
+      </label>
       <button id="btn-restore">Przywróć</button>
       <button id="btn-export">Zapisz CSV</button>
-      <button id="btn-cloud-load">Wczytaj z chmury</button>
+      <!-- Przyciski chmury -->
       <button id="btn-load-cloud">Załaduj z chmury</button>
       <button id="btn-save-cloud">Zapisz w chmurze</button>
-
     </div>
   </header>
 
@@ -140,271 +114,7 @@
     <button id="bulk-apply">Ustaw dla widocznych</button>
   </footer>
 
-
-
-<script>
-window.addEventListener('error', e => {
-  alert('JS error: ' + e.message + '\n' + (e.filename||'') + ':' + (e.lineno||''));
-});
-window.addEventListener('unhandledrejection', e => {
-  const r = e.reason;
-  alert('Promise error: ' + (r?.message || r));
-});
-</script>
-
-<script>
-(function initInlineLogger(){
-  function ready(fn){
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      fn();
-    } else {
-      document.addEventListener('DOMContentLoaded', fn, { once:true });
-    }
-  }
-  ready(function(){
-    try{
-      var box = document.getElementById('logbox');
-      if (!box){
-        box = document.createElement('div');
-        box.id = 'logbox';
-        box.style.cssText = 'position:fixed;left:8px;bottom:8px;right:8px;max-height:45vh;overflow:auto;background:#0b0b0b;color:#9ef;padding:8px;font:12px/1.4 monospace;z-index:2147483647;opacity:.95;border:1px solid #234;border-radius:8px';
-        document.body.appendChild(box);
-      }
-      function line(prefix, parts){
-        var d = document.createElement('div');
-        var txt = [prefix].concat([].map.call(parts, function(a){
-          try { return (typeof a === 'object') ? JSON.stringify(a) : String(a); }
-          catch(_) { return String(a); }
-        })).join(' ');
-        d.textContent = txt;
-        box.appendChild(d);
-        box.scrollTop = box.scrollHeight;
-      }
-      var _log = console.log, _warn = console.warn, _err = console.error;
-      console.log = function(){ line('[log]', arguments); _log.apply(console, arguments); };
-      console.warn = function(){ line('[warn]', arguments); _warn.apply(console, arguments); };
-      console.error = function(){ line('[err]', arguments); _err.apply(console, arguments); };
-      window.debugToast = function(){ line('[dbg]', arguments); };
-      window.clearLog = function(){ box.innerHTML=''; };
-      window.addEventListener('error', function(e){ line('[onerror]', [e.message, (e.filename||'')+':'+(e.lineno||'')]); });
-      window.addEventListener('unhandledrejection', function(e){ var r=e.reason; line('[unhandled]', [r?.message||String(r)]); });
-      console.log('[logger] ready');
-    }catch(e){ alert('Logger init error: '+e.message); }
-  });
-})();
-</script>
-<script>
-(function(){
-  // Diagnoza sesji + szybkie odczyty
-  document.getElementById('btn-dbg')?.addEventListener('click', async () => {
-    try{
-      const s = await (window.sb?.auth?.getSession?.() || Promise.resolve({data:null}));
-      const uid = s?.data?.session?.user?.id || null;
-      const localRaw = (typeof STORAGE_KEY==='string') ? localStorage.getItem(STORAGE_KEY) : null;
-      const local = localRaw ? JSON.parse(localRaw) : null;
-      console.log('[DBG] uid:', uid);
-      console.log('[DBG] local.__local_changed_at:', local?.__local_changed_at);
-      console.log('[DBG] local.__cloud_synced_at:', local?.__cloud_synced_at);
-      if (window.sb && uid){
-        const { data, error } = await window.sb.from('plans')
-          .select('updated_at')
-          .eq('user_id', uid).maybeSingle();
-        console.log('[DBG] cloud.updated_at:', data?.updated_at, 'error:', error?.message);
-      } else {
-        console.warn('[DBG] brak sb lub uid');
-      }
-    }catch(e){ console.error('[DBG] exception', e); }
-  });
-
-  // Wymuś CLOUD: zerujemy lokalne znaczniki, potem odpalamy load
-  document.getElementById('btn-force-cloud')?.addEventListener('click', async () => {
-    try{
-      if (typeof STORAGE_KEY==='string'){
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw){
-          const obj = JSON.parse(raw);
-          delete obj.__local_changed_at;
-          delete obj.__cloud_synced_at;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
-        }
-      }
-      console.log('[FORCE] wyzerowano lokalne znaczniki; ładuję chmurę…');
-      if (window._authCloudLoad) await window._authCloudLoad();
-      console.log('[FORCE] chmura wczytana');
-    }catch(e){ console.error('[FORCE] exception', e); }
-  });
-})();
-</script>
-<script>
-(function(){
-  if (!/\bdebug=1\b/.test(location.search)) return;
-
-  function css(el, s){ el.style.cssText = s; return el; }
-  const bar = css(document.body.appendChild(document.createElement('div')),
-    'position:fixed;left:8px;bottom:8px;right:8px;z-index:2147483647;display:flex;gap:6px;flex-wrap:wrap;background:#0b0b0b;color:#cfe;padding:8px;border:1px solid #234;border-radius:8px;font:12px/1.3 monospace');
-  bar.innerHTML = `
-    <button id="dbg-diag">Diag</button>
-    <button id="dbg-save">Test zapis</button>
-    <button id="dbg-load">Załaduj</button>
-    <button id="dbg-roundtrip">Roundtrip</button>
-    <span id="dbg-out" style="margin-left:auto"></span>
-  `;
-  const out = bar.querySelector('#dbg-out');
-  const say = (t)=>{ out.textContent = t; console.log('[diag]', t); };
-
-  async function getUid(){
-    try {
-      const { data } = await (window.sb?.auth?.getSession?.() || Promise.resolve({data:null}));
-      return data?.session?.user?.id || null;
-    } catch { return null; }
-  }
-
-  async function diag(){
-    const uid = await getUid();
-    if (!uid) return say('Brak sesji/uid');
-    try {
-      const { data, error } = await window.sb.from('plans')
-        .select('updated_at')
-        .eq('user_id', uid).maybeSingle();
-      if (error) return say('Błąd SELECT: ' + error.message);
-      say('cloud.updated_at: ' + (data?.updated_at || 'brak'));
-    } catch(e){ say('Diag exc: ' + e.message); }
-  }
-
-  async function testSave(){
-    const uid = await getUid();
-    if (!uid) return say('Brak sesji/uid');
-    try {
-      window.state = window.state || {};
-      window.state.__local_changed_at = new Date().toISOString();
-      window.state.__diag = { wrote_at: window.state.__local_changed_at };
-      if (typeof window._authCloudSave === 'function') await window._authCloudSave();
-      else if (typeof window.savePlannerData === 'function') await window.savePlannerData();
-      say('Test zapis → OK');
-    } catch(e){ say('Zapis exc: ' + e.message); }
-  }
-
-  async function doLoad(){
-    const uid = await getUid();
-    if (!uid) return say('Brak sesji/uid');
-    try {
-      if (typeof window._authCloudLoad === 'function') await window._authCloudLoad();
-      else if (typeof window.loadPlannerData === 'function') await window.loadPlannerData();
-      const ts = window.state?.__cloud_synced_at || '(no cloud ts)';
-      say('Załadowano (cloud ts: ' + ts + ')');
-    } catch(e){ say('Load exc: ' + e.message); }
-  }
-
-  async function roundtrip(){
-    const ts = new Date().toISOString();
-    window.state = window.state || {};
-    window.state.__local_changed_at = ts;
-    window.state.__diag = { wrote_at: ts };
-    if (typeof window._authCloudSave === 'function') await window._authCloudSave();
-    else if (typeof window.savePlannerData === 'function') await window.savePlannerData();
-    await new Promise(r => setTimeout(r, 400));
-    if (typeof window._authCloudLoad === 'function') await window._authCloudLoad();
-    else if (typeof window.loadPlannerData === 'function') await window.loadPlannerData();
-    const got = window.state?.__diag?.wrote_at;
-    say(got === ts ? 'Roundtrip OK' : ('Roundtrip FAIL (got ' + got + ')'));
-  }
-
-  bar.querySelector('#dbg-diag').onclick = diag;
-  bar.querySelector('#dbg-save').onclick = testSave;
-  bar.querySelector('#dbg-load').onclick = doLoad;
-  bar.querySelector('#dbg-roundtrip').onclick = roundtrip;
-})();
-</script>
-<script>
-(function(){
-  function ready(fn){
-    if (document.readyState === 'complete' || document.readyState === 'interactive') fn();
-    else document.addEventListener('DOMContentLoaded', fn, { once:true });
-  }
-  ready(function(){
-    var box = document.getElementById('logbox');
-    if (!box) return;
-
-    // Przenieś na górę i zwęż
-    box.style.top = '8px';
-    box.style.bottom = 'auto';
-    box.style.maxHeight = '35vh';
-    box.style.right = '8px';
-    box.style.left = '8px';
-
-    // Pasek narzędzi (collapse / close)
-    var bar = document.createElement('div');
-    bar.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
-    var title = document.createElement('div');
-    title.textContent = 'Logger';
-    title.style.cssText = 'font-weight:bold;cursor:move;flex:1';
-    var btnCollapse = document.createElement('button');
-    btnCollapse.textContent = '↕';
-    btnCollapse.title = 'Zwiń/Rozwiń';
-    var btnClose = document.createElement('button');
-    btnClose.textContent = '✕';
-    btnClose.title = 'Zamknij';
-    bar.appendChild(title); bar.appendChild(btnCollapse); bar.appendChild(btnClose);
-    box.insertBefore(bar, box.firstChild);
-
-    // Zwijanie
-    var collapsed = false;
-    var contentWrap = document.createElement('div');
-    while (bar.nextSibling) contentWrap.appendChild(bar.nextSibling);
-    box.appendChild(contentWrap);
-    function applyCollapse(){
-      contentWrap.style.display = collapsed ? 'none' : '';
-      box.style.opacity = collapsed ? '0.8' : '0.95';
-    }
-    btnCollapse.onclick = function(){ collapsed = !collapsed; applyCollapse(); };
-    applyCollapse();
-
-    // Zamknięcie
-    btnClose.onclick = function(){ box.remove(); };
-
-    // Proste przeciąganie (touch + mouse)
-    (function drag(el, handle){
-      var sx=0, sy=0, ox=0, oy=0, dragging=false;
-      function start(e){
-        dragging = true;
-        var p = ('touches' in e) ? e.touches[0] : e;
-        sx = p.clientX; sy = p.clientY;
-        ox = el.offsetLeft; oy = el.offsetTop;
-        e.preventDefault();
-      }
-      function move(e){
-        if (!dragging) return;
-        var p = ('touches' in e) ? e.touches[0] : e;
-        var dx = p.clientX - sx, dy = p.clientY - sy;
-        el.style.left = Math.max(8, ox + dx) + 'px';
-        el.style.top  = Math.max(8, oy + dy) + 'px';
-        el.style.right = 'auto'; // po przeciągnięciu pozycjonuj lewą krawędzią
-      }
-      function end(){ dragging = false; }
-      handle.addEventListener('mousedown', start);
-      window.addEventListener('mousemove', move);
-      window.addEventListener('mouseup', end);
-      handle.addEventListener('touchstart', start, {passive:false});
-      window.addEventListener('touchmove', move, {passive:false});
-      window.addEventListener('touchend', end);
-    })(box, title);
-
-    // Szybkie skróty
-    window.hideLogger = () => box.remove();
-    window.collapseLogger = () => { collapsed = true; applyCollapse(); };
-  });
-})();
-</script>
-  <script src="auth-cloud-lite.js?v=lite1"></script>
-<script>
-  // Powiedz dodatkom jak czytać i wstawiać stan Twojej appki:
-  cloud.setGetState(() => window.state);
-  cloud.setSetState((st) => { window.state = st; window.renderAll?.(); });
-
-  // Opcjonalnie: automatyczny zapis do chmury na każdą zmianę w Twoim save()
-  cloud.hookSave(1000); // debounce 1000 ms
-</script>
-
-
+    <script src="app.js"></script>
+    <script src="auth-cloud.js?v=sync5final"></script>
 </body>
 </html>
