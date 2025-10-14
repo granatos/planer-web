@@ -1,34 +1,409 @@
-/* ========================================================================
-   Planer Web — app.js (Auth + Cloud Add-on)
-   [... trimmed header in previous attempt ...]
-========================================================================= */
+// ---- konfiguracja ----
+const INITIAL_WORLDS = ["A","B","C","E","F","G","H","J","K","L","M"];
+const WG_VALUES = ["1 Etap","2 Etap","3 Etap","4 Etap","5 Etap","Koniec"];
+const MAPA_VALUES = ["Ocean 3","Wirtual 1","Wirtual 2","Wirtual 3","Mars 1","Mars 2","Pas 1","Pas 2","Wenus 1","Wenus 2","Jowisz 1","Jowisz 2","Tytan 1","Tytan 2","Węzeł 1","Węzeł 2","Koniec"];
+const EPOKA_VALUES = ["Pas","Wenus","Jowisz","Tytan","Węzeł"];
+const DIAMOND_COSTS = [4000,4200,4400,4600,4800,5200,5600,6000,6400,6800,7200,7600,8000,8800,9600,10400,11200,12000,12800,13600];
+const STORAGE_KEY = "planer_web_v1";
 
+let state = {
+  worlds: [],
+  groups: { Event:true, GPC:true, NK:true, WG:true, Zbiory:true, "Dane świata":true },
+  lastEvent8: null,
+  lastMidnight: null,
+  lastWGDate: null
+};
+
+// ---- utils ----
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const fmtDate = d => d.toISOString();
+const todayISO = () => (new Date()).toISOString().slice(0,10);
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) state = JSON.parse(raw);
+    if (!state.worlds || !Array.isArray(state.worlds)) state.worlds = [];
+  } catch(e){ /* ignore */ }
+}
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function ensureInitialWorlds() {
+  if (state.worlds.length === 0) {
+    for (const w of INITIAL_WORLDS) {
+      state.worlds.push(makeWorld(w));
+    }
+  }
+}
+
+function makeWorld(name) {
+  return {
+    name,
+    visible:true,
+    zad:false, rywal:false, pl3:false, nr:"",
+    trial:"", opor:"0", koniec:false,
+    silver:"", gold:"",
+    nk:false, nk_ts:"",
+    wg: WG_VALUES[0],
+    mot:false, pr:false,
+    mapa: MAPA_VALUES[0],
+    epoka: EPOKA_VALUES[0]
+  };
+}
+
+// ---- UI render ----
+function renderAll() {
+  // grupy on/off
+  for (const g of ["Event","GPC","NK","WG","Zbiory","Dane świata"]) {
+    const el = $("#grp-"+(g==="Dane świata"?"Dane":"")+ (g!=="Dane świata"?g:""));
+  }
+  // checkboxy grup
+  $("#grp-Event").checked = !!state.groups["Event"];
+  $("#grp-GPC").checked = !!state.groups["GPC"];
+  $("#grp-NK").checked = !!state.groups["NK"];
+  $("#grp-WG").checked = !!state.groups["WG"];
+  $("#grp-Zbiory").checked = !!state.groups["Zbiory"];
+  $("#grp-Dane").checked = !!state.groups["Dane świata"];
+
+  const rows = $("#rows");
+  rows.innerHTML = "";
+
+  const hiddenNames = [];
+  state.worlds.forEach((w, idx) => {
+    if (!w.visible) hiddenNames.push(w.name);
+    const row = document.createElement("div");
+    row.className = "row grid" + (w.visible ? "" : " hiddenRow");
+
+    // kolumny:
+    row.appendChild(cellCheckbox(w.visible, (val)=>{ w.visible = val; refreshHiddenSelect(); renderAll(); save(); }));
+    row.appendChild(cellLabel(w.name));
+
+    // Event
+    const enableEvent = !!state.groups["Event"];
+    row.appendChild(cellCheckbox(w.zad, v=>{ w.zad=v; save(); }, enableEvent));
+    row.appendChild(cellCheckbox(w.rywal, v=>{ w.rywal=v; save(); }, enableEvent));
+    row.appendChild(cellCheckbox(w.pl3, v=>{ w.pl3=v; save(); }, enableEvent));
+    row.appendChild(cellText(w.nr, v=>{ w.nr=v; save(); }, enableEvent, 6));
+
+    // GPC
+    const enableGPC = !!state.groups["GPC"];
+    row.appendChild(cellText(w.trial, v=>{ if(validTrial(v)) { w.trial=v; save(); } }, enableGPC, 4));
+    const oporEntry = cellText(w.opor, v=>{ w.opor=v; save(); }, enableGPC && !w.koniec, 4);
+    row.appendChild(oporEntry);
+    row.appendChild(cellCheckbox(w.koniec, v=>{
+      w.koniec = v;
+      // blokuj/odblokuj opór
+      renderAll(); save();
+    }, enableGPC));
+
+    const onSilverChange = (v)=>{
+      w.silver = v; save();
+      // odśwież tylko badge
+      badgeS.textContent = "Pakiety: " + calcPacks(toInt(v));
+      badgeS.style.color = calcPacks(toInt(v))>0 ? "green" : "gray";
+    };
+    const onGoldChange = (v)=>{
+      w.gold = v; save();
+      badgeG.textContent = "Pakiety: " + calcPacks(toInt(v));
+      badgeG.style.color = calcPacks(toInt(v))>0 ? "green" : "gray";
+    };
+    row.appendChild(cellText(w.silver, onSilverChange, enableGPC, 8));
+    const badgeS = cellBadge("Pakiety: " + calcPacks(toInt(w.silver)));
+    row.appendChild(badgeS);
+    row.appendChild(cellText(w.gold, onGoldChange, enableGPC, 8));
+    const badgeG = cellBadge("Pakiety: " + calcPacks(toInt(w.gold)));
+    row.appendChild(badgeG);
+
+    // NK
+    const enableNK = !!state.groups["NK"];
+    row.appendChild(cellCheckbox(w.nk, v=>{
+      w.nk = v;
+      w.nk_ts = v ? new Date().toISOString() : "";
+      save();
+    }, enableNK));
+
+    // WG
+    const enableWG = !!state.groups["WG"];
+    row.appendChild(cellSelect(WG_VALUES, w.wg, v=>{
+      w.wg=v; save();
+    }, enableWG));
+
+    // Zbiory
+    const enableZb = !!state.groups["Zbiory"];
+    row.appendChild(cellCheckbox(w.mot, v=>{ w.mot=v; save(); }, enableZb));
+    row.appendChild(cellCheckbox(w.pr,  v=>{ w.pr=v;  save(); }, enableZb));
+
+    // Dane świata
+    const enableDane = !!state.groups["Dane świata"];
+    row.appendChild(cellSelect(MAPA_VALUES, w.mapa, v=>{ w.mapa=v; save(); }, enableDane));
+    row.appendChild(cellSelect(EPOKA_VALUES, w.epoka, v=>{ w.epoka=v; save(); }, enableDane));
+
+    rows.appendChild(row);
+  });
+
+  refreshHiddenSelect();
+}
+
+function cellLabel(text){
+  const d = document.createElement("div");
+  d.className = "cell";
+  d.textContent = text;
+  return d;
+}
+function cellCheckbox(checked, onChange, enabled=true){
+  const d = document.createElement("div"); d.className="cell chk-green";
+  const inp = document.createElement("input");
+  inp.type="checkbox"; inp.checked=!!checked; inp.disabled=!enabled;
+  inp.addEventListener("change", ()=> onChange(inp.checked));
+  d.appendChild(inp);
+  return d;
+}
+function cellText(value, onChange, enabled=true, size=6){
+  const d = document.createElement("div"); d.className="cell";
+  const inp = document.createElement("input");
+  inp.type="text"; inp.value = value ?? ""; inp.disabled=!enabled;
+  inp.size = size;
+  inp.addEventListener("input", ()=> onChange(inp.value));
+  d.appendChild(inp);
+  return d;
+}
+function cellSelect(options, value, onChange, enabled=true){
+  const d = document.createElement("div"); d.className="cell";
+  const sel = document.createElement("select");
+  sel.disabled = !enabled;
+  options.forEach(o=>{
+    const opt = document.createElement("option"); opt.value=o; opt.textContent=o;
+    if (o===value) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener("change", ()=> onChange(sel.value));
+  d.appendChild(sel);
+  return d;
+}
+function cellBadge(text){
+  const d = document.createElement("div"); d.className="cell";
+  const span = document.createElement("span");
+  span.className="badge";
+  span.textContent = text;
+  span.style.color = (text.endsWith(" 0") ? "gray" : "green");
+  d.appendChild(span);
+  return d;
+}
+
+function refreshHiddenSelect(){
+  const sel = $("#hidden-select");
+  const hidden = state.worlds.filter(w=>!w.visible).map(w=>w.name);
+  sel.innerHTML = "";
+  hidden.forEach(n=>{
+    const o = document.createElement("option"); o.value=n; o.textContent=n; sel.appendChild(o);
+  });
+}
+
+// ---- obliczenia pakietów ----
+const toInt = (s)=> {
+  if(!s) return 0;
+  return parseInt(String(s).replace(/\s|,/g, ""), 10) || 0;
+};
+function calcPacks(amount){
+  let left = amount, packs=0;
+  for(const c of DIAMOND_COSTS){
+    if(left>=c){ left -= c; packs++; } else break;
+  }
+  return packs;
+}
+const validTrial = (v)=> v==="" || (/^\d+$/.test(v) && +v>=1 && +v<=50);
+
+// ---- resetery czasu (strefa: lokalna przeglądarki) ----
+function tickResets(){
+  const now = new Date();
+  const wd = now.getDay(); // 0 niedziela ... 2 wtorek itd. (wtorek = 2)
+  const hh = now.getHours(), mm = now.getMinutes();
+
+  // Event 08:00
+  if (hh===8 && mm===0) {
+    if (state.lastEvent8 !== todayISO()) {
+      if (state.groups.Event){
+        state.worlds.forEach(w=>{ w.zad=false; w.rywal=false; });
+        save(); renderAll();
+      }
+      state.lastEvent8 = todayISO();
+      save();
+    }
+  }
+  // Północ
+  if (hh===0 && mm===0) {
+    if (state.lastMidnight !== todayISO()) {
+      if (state.groups.Event){
+        state.worlds.forEach(w=> w.pl3=false);
+      }
+      if (state.groups.GPC){
+        state.worlds.forEach(w=>{ w.opor="0"; w.koniec=false; });
+      }
+      save(); renderAll();
+      state.lastMidnight = todayISO();
+      save();
+    }
+  }
+  // WG: wtorek 08:00
+  if (wd===2 && (hh>8 || (hh===8 && mm===0))) {
+    if (state.groups.WG && state.lastWGDate !== todayISO()){
+      state.worlds.forEach(w=> w.wg = WG_VALUES[0]);
+      save(); renderAll();
+      state.lastWGDate = todayISO();
+      save();
+    }
+  }
+  // NK: 10h od zaznaczenia
+  const nowMs = now.getTime();
+  state.worlds.forEach(w=>{
+    if (w.nk && w.nk_ts){
+      const ts = Date.parse(w.nk_ts);
+      if (!isNaN(ts) && nowMs - ts >= 10*60*60*1000){
+        w.nk = false; w.nk_ts = "";
+      }
+    }
+  });
+  save();
+}
+
+// ---- masowe akcje ----
+function setupBulk(){
+  const target = $("#bulk-target");
+  const ctrlWG = $("#bulk-wg");
+  const ctrlOnOff = $("#bulk-onoff");
+  const ctrlText = $("#bulk-text");
+
+  function updateCtrls(){
+    ctrlWG.hidden = ctrlOnOff.hidden = ctrlText.hidden = true;
+    const t = target.value;
+    if (t==="WG") ctrlWG.hidden=false;
+    else if (t==="Motywka" || t==="PR") ctrlOnOff.hidden=false;
+    else if (t==="nr zadania") ctrlText.hidden=false;
+  }
+  target.addEventListener("change", updateCtrls);
+  updateCtrls();
+
+  $("#bulk-apply").addEventListener("click", ()=>{
+    const t = target.value;
+    if (t==="WG"){
+      const v = ctrlWG.value || WG_VALUES[0];
+      state.worlds.filter(w=>w.visible).forEach(w=> w.wg = v);
+    } else if (t==="Motywka" || t==="PR"){
+      const on = (ctrlOnOff.value==="Zaznacz");
+      const key = (t==="Motywka"?"mot":"pr");
+      state.worlds.filter(w=>w.visible).forEach(w=> w[key] = on);
+    } else if (t==="nr zadania"){
+      const txt = ctrlText.value || "";
+      state.worlds.filter(w=>w.visible).forEach(w=> w.nr = txt);
+    }
+    save(); renderAll();
+  });
+}
+
+// ---- zdarzenia UI górnego paska ----
+function setupTopbar(){
+  // grupy
+  $("#grp-Event").addEventListener("change", e=>{ state.groups.Event = e.target.checked; save(); renderAll(); });
+  $("#grp-GPC").addEventListener("change", e=>{ state.groups.GPC = e.target.checked; save(); renderAll(); });
+  $("#grp-NK").addEventListener("change", e=>{ state.groups.NK = e.target.checked; save(); renderAll(); });
+  $("#grp-WG").addEventListener("change", e=>{ state.groups.WG = e.target.checked; save(); renderAll(); });
+  $("#grp-Zbiory").addEventListener("change", e=>{ state.groups.Zbiory = e.target.checked; save(); renderAll(); });
+  $("#grp-Dane").addEventListener("change", e=>{ state.groups["Dane świata"] = e.target.checked; save(); renderAll(); });
+
+  // dodaj/usuń/przywróć
+  $("#btn-add").addEventListener("click", ()=>{
+    const name = ($("#world-input").value||"").trim();
+    if (!name) { alert("Podaj nazwę świata."); return; }
+    if (state.worlds.some(w=>w.name.toLowerCase()===name.toLowerCase())) { alert("Świat już istnieje."); return; }
+    state.worlds.push(makeWorld(name));
+    $("#world-input").value="";
+    save(); renderAll();
+  });
+  $("#btn-del").addEventListener("click", ()=>{
+    const name = ($("#world-input").value||"").trim();
+    if (!name) { alert("Podaj nazwę świata do usunięcia."); return; }
+    const i = state.worlds.findIndex(w=> w.name.toLowerCase()===name.toLowerCase());
+    if (i<0) { alert("Nie znaleziono świata."); return; }
+    state.worlds.splice(i,1);
+    save(); renderAll();
+  });
+  $("#btn-restore").addEventListener("click", ()=>{
+    const name = $("#hidden-select").value;
+    if (!name) return;
+    const w = state.worlds.find(x=>x.name===name);
+    if (w){ w.visible = true; save(); renderAll(); }
+  });
+
+  // export CSV
+  $("#btn-export").addEventListener("click", ()=>{
+    const rows = buildCSV();
+    const blob = new Blob([rows], {type:"text/csv;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `status_${todayISO()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+}
+
+function buildCSV(){
+  const header = [
+    "Świat","Visible","Zadanie dzienne","Rywal","3 plansze","nr zadania",
+    "Trial","Opór","Koniec GPC","Srebrne","Pakiety S","Złote","Pakiety Z",
+    "NK_ts","NK_active","WG","Motywka","PR","Mapa","Epoka"
+  ];
+  const lines = [header.join(";")];
+  state.worlds.forEach(w=>{
+    const packsS = calcPacks(toInt(w.silver));
+    const packsG = calcPacks(toInt(w.gold));
+    lines.push([
+      w.name, +!!w.visible, +!!w.zad, +!!w.rywal, +!!w.pl3, (w.nr||""),
+      (w.trial||""), (w.opor||"0"), +!!w.koniec, (w.silver||""), packsS, (w.gold||""), packsG,
+      (w.nk_ts||""), +!!w.nk, (w.wg||WG_VALUES[0]), +!!w.mot, +!!w.pr, (w.mapa||""), (w.epoka||"")
+    ].join(";"));
+  });
+  return lines.join("\n");
+}
+
+// ---- start ----
+load();
+ensureInitialWorlds();
+setupTopbar();
+setupBulk();
+renderAll();
+setInterval(tickResets, 30 * 1000);
+
+
+// ===== AUTH BOOTSTRAP (compact, idempotent) =====
 (() => {
-  if (!window.REDIRECT_URL) window.REDIRECT_URL = 'https://granatos.github.io/planer-web/';
-  const $ = (id) => document.getElementById(id);
-  const log = (...a) => console.log('[auth+cloud]', ...a);
-  const warn = (...a) => console.warn('[auth+cloud]', ...a);
-  const err = (...a) => console.error('[auth+cloud]', ...a);
+  if (window.__AUTH_BOOT_WIRED__) return;
+  window.__AUTH_BOOT_WIRED__ = true;
 
+  // Stable redirect (GitHub Pages)
+  if (!window.REDIRECT_URL) window.REDIRECT_URL = 'https://granatos.github.io/planer-web/';
+
+  // Init Supabase client safely and expose as window.sb
   (function initSupabase(){
     const url = window.SUPABASE_URL;
     const key = window.SUPABASE_ANON_KEY;
     if (typeof window.supabase === 'object' && url && key) {
-      try { window.sb = window.supabase.createClient(url, key); log('supabase client ready'); }
-      catch(e){ err('supabase init failed', e); window.sb = null; }
+      try { window.sb = window.supabase.createClient(url, key); console.log('[supabase] client ready'); }
+      catch(e){ console.warn('[supabase] init failed', e); window.sb = null; }
     } else {
-      window.sb = window.sb ?? null;
-      warn('supabase not ready', { hasLib: typeof window.supabase, hasUrl: !!url, hasKey: !!key });
+      if (typeof window.sb === 'undefined') window.sb = null;
     }
   })();
 
-  const emailEl   = document.getElementById('auth-email');
-  const statusEl  = document.getElementById('auth-status');
-  const btnMagic  = document.getElementById('btn-magic');
-  const btnGoogle = document.getElementById('btn-google');
-  const btnDiscord= document.getElementById('btn-discord');
-  const btnLogout = document.getElementById('btn-logout');
-  const btnSaveCloud = document.getElementById('btn-save-cloud');
+  function $(id){ return document.getElementById(id); }
+  const emailEl   = $('auth-email');
+  const statusEl  = $('auth-status');
+  const btnMagic  = $('btn-magic');
+  const btnGoogle = $('btn-google');
+  const btnDiscord= $('btn-discord');
+  const btnLogout = $('btn-logout');
 
   function setStatus(user){
     const meta = user?.user_metadata || {};
@@ -39,63 +414,6 @@
     if (btnGoogle)  btnGoogle.hidden  = !!user;
     if (btnDiscord) btnDiscord.hidden = !!user;
     if (emailEl)    emailEl.hidden    = !!user;
-  }
-
-  let cloudSaveTimer = null;
-
-  async function savePlannerData() {
-    if (!window.sb || !window.currentUser) return;
-    try {
-      const payload = (typeof window.state !== 'undefined') ? window.state : {};
-      const { error } = await window.sb.from('plans').insert({ user_id: window.currentUser.id, payload });
-      if (error) err('[cloud save] error', error); else log('[cloud save] OK');
-    } catch (e) { err('[cloud save] exception', e); }
-  }
-
-  function scheduleSaveCloud() {
-    clearTimeout(cloudSaveTimer);
-    cloudSaveTimer = setTimeout(savePlannerData, 2500);
-  }
-
-  async function loadPlannerData() {
-    if (!window.sb || !window.currentUser) return;
-    try {
-      const { data, error } = await window.sb
-        .from('plans')
-        .select('payload')
-        .eq('user_id', window.currentUser.id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error && error.code !== 'PGRST116') { err('[cloud load] error', error); return; }
-      if (data?.payload) {
-        window.state = data.payload;
-        if (typeof window.renderAll === 'function') window.renderAll();
-        if (typeof window.STORAGE_KEY === 'string') {
-          try { localStorage.setItem(window.STORAGE_KEY, JSON.stringify(window.state)); } catch {}
-        }
-        log('[cloud load] applied');
-      } else {
-        log('[cloud load] no snapshot (ok)');
-      }
-    } catch (e) { err('[cloud load] exception', e); }
-  }
-
-  (function patchSave(){
-    const orig = window.save;
-    window.save = function(){
-      try { if (typeof orig === 'function') orig.apply(this, arguments); } catch(e){ err('orig save error', e); }
-      try { scheduleSaveCloud(); } catch(e){ err('scheduleSaveCloud error', e); }
-    };
-    log('save() patched for cloud');
-  })();
-
-  async function upsertProfile(user){
-    try {
-      if (!window.sb || !user) return;
-      const nick = user.user_metadata?.user_name || (user.email||'').split('@')[0] || 'User';
-      await window.sb.from('profiles').upsert({ id: user.id, display_name: nick });
-    } catch(e){ }
   }
 
   function wire(){
@@ -113,7 +431,7 @@
           });
           if (error) { console.error(error); return alert(error.message); }
           alert('Wysłano link logowania (sprawdź skrzynkę/spam).');
-        }catch(e){ console.error(e); alert('Błąd logowania (szczegóły w konsoli).'); }
+        }catch(e){ console.error(e); alert('Błąd logowania (konsola).'); }
       });
     }
 
@@ -143,39 +461,24 @@
     if (btnLogout && !btnLogout.dataset.wired){
       btnLogout.dataset.wired = '1';
       btnLogout.addEventListener('click', async () => {
-        try{ await window.sb?.auth?.signOut(); setStatus(null); }catch(e){ }
+        try{ await window.sb?.auth?.signOut(); setStatus(null); }catch(e){ console.error(e); }
       });
     }
 
-    if (btnSaveCloud && !btnSaveCloud.dataset.wired){
-      btnSaveCloud.dataset.wired = '1';
-      btnSaveCloud.addEventListener('click', async () => {
-        if (!window.currentUser) return alert('Zaloguj się');
-        await savePlannerData();
-        alert('Zapisano w chmurze');
-      });
-    }
-
+    // Session hooks
     if (window.sb){
-      window.sb.auth.onAuthStateChange(async (_e, session) => {
-        const user = session?.user || null;
-        window.currentUser = user;
-        setStatus(user);
-        if (user) { await upsertProfile(user); await loadPlannerData(); }
-      });
-      window.sb.auth.getSession().then(async ({data}) => {
-        const user = data?.session?.user || null;
-        window.currentUser = user;
-        setStatus(user);
-        if (user) { await upsertProfile(user); await loadPlannerData(); }
-      });
+      window.sb.auth.onAuthStateChange((_e, session) => setStatus(session?.user || null));
+      window.sb.auth.getSession().then(({data}) => setStatus(data?.session?.user || null));
     } else {
       setStatus(null);
     }
 
-    log('wired', { magic: !!btnMagic, google: !!btnGoogle, discord: !!btnDiscord, logout: !!btnLogout });
+    console.log('[AUTH BOOT] wired', {
+      magic: !!btnMagic, google: !!btnGoogle, discord: !!btnDiscord, logout: !!btnLogout
+    });
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') wire();
   else document.addEventListener('DOMContentLoaded', wire);
 })();
+// ===== /AUTH BOOTSTRAP =====
