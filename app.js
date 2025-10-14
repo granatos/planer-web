@@ -13,6 +13,33 @@ const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const authStatusEl = document.getElementById('auth-status');
 
+async function setAuthUI(user){
+  currentUser = user;
+  const meta = user?.user_metadata || {};
+  const label =
+    user?.email ||
+    meta.full_name ||
+    meta.name ||
+    meta.user_name ||   // Discord/GitHub
+    meta.preferred_username ||
+    'Konto';
+
+  if (authStatusEl){
+    authStatusEl.textContent = user ? label : 'Nie zalogowano';
+  }
+  if (btnLogout)  btnLogout.hidden  = !user;
+  if (btnMagic)   btnMagic.hidden   = !!user;
+  if (btnGoogle)  btnGoogle.hidden  = !!user;
+  if (btnDiscord) btnDiscord.hidden = !!user;
+  if (emailEl)    emailEl.hidden    = !!user;
+
+  if (user){
+    // (opcjonalnie) zapisz profil, wczytaj dane planera
+    try { await upsertProfile?.(user); } catch {}
+    try { await loadPlannerData?.(); } catch {}
+  }
+}
+
 function setAuthUI(user){
   if (!authStatusEl) return;
   authStatusEl.textContent = user ? (user.email || '(konto)') : 'Nie zalogowano';
@@ -33,6 +60,19 @@ btnMagic?.addEventListener('click', async () => {
   alert('Sprawdź skrzynkę – wysłałem link logowania.');
 });
 
+const btnDiscord = document.getElementById('btn-discord');
+
+btnDiscord?.addEventListener('click', async () => {
+  if (!sb) return alert('Brak konfiguracji Supabase');
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'discord',
+    options: {
+      redirectTo: REDIRECT_URL,   // musi być identyczny jak w Supabase Auth
+      scopes: 'identify email'    // email jest opcjonalny, ale przydatny
+    }
+  });
+  if (error) alert(error.message);
+});
 
 
 let state = {
