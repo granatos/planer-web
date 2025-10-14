@@ -5,75 +5,6 @@ const MAPA_VALUES = ["Ocean 3","Wirtual 1","Wirtual 2","Wirtual 3","Mars 1","Mar
 const EPOKA_VALUES = ["Pas","Wenus","Jowisz","Tytan","Węzeł"];
 const DIAMOND_COSTS = [4000,4200,4400,4600,4800,5200,5600,6000,6400,6800,7200,7600,8000,8800,9600,10400,11200,12000,12800,13600];
 const STORAGE_KEY = "planer_web_v1";
-const REDIRECT_URL = 'https://granatos.github.io/planer-web/'; // ważny trailing slash
-
-const SUPABASE_URL = window.SUPABASE_URL;
-const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY;
-const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const authStatusEl = document.getElementById('auth-status');
-
-async function setAuthUI(user){
-  currentUser = user;
-  const meta = user?.user_metadata || {};
-  const label =
-    user?.email ||
-    meta.full_name ||
-    meta.name ||
-    meta.user_name ||   // Discord/GitHub
-    meta.preferred_username ||
-    'Konto';
-
-  if (authStatusEl){
-    authStatusEl.textContent = user ? label : 'Nie zalogowano';
-  }
-  if (btnLogout)  btnLogout.hidden  = !user;
-  if (btnMagic)   btnMagic.hidden   = !!user;
-  if (btnGoogle)  btnGoogle.hidden  = !!user;
-  if (btnDiscord) btnDiscord.hidden = !!user;
-  if (emailEl)    emailEl.hidden    = !!user;
-
-  if (user){
-    // (opcjonalnie) zapisz profil, wczytaj dane planera
-    try { await upsertProfile?.(user); } catch {}
-    try { await loadPlannerData?.(); } catch {}
-  }
-}
-
-function setAuthUI(user){
-  if (!authStatusEl) return;
-  authStatusEl.textContent = user ? (user.email || '(konto)') : 'Nie zalogowano';
-}
-
-if (sb){
-  sb.auth.onAuthStateChange((_e, session) => setAuthUI(session?.user || null));
-  sb.auth.getSession().then(({data}) => setAuthUI(data?.session?.user || null));
-} else {
-  setAuthUI(null);
-}
-
-btnMagic?.addEventListener('click', async () => {
-  const email = document.getElementById('auth-email').value.trim();
-  if (!email) return alert('Podaj email');
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: REDIRECT_URL }});
-  if (error) return alert(error.message);
-  alert('Sprawdź skrzynkę – wysłałem link logowania.');
-});
-
-const btnDiscord = document.getElementById('btn-discord');
-
-btnDiscord?.addEventListener('click', async () => {
-  if (!sb) return alert('Brak konfiguracji Supabase');
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: 'discord',
-    options: {
-      redirectTo: REDIRECT_URL,   // musi być identyczny jak w Supabase Auth
-      scopes: 'identify email'    // email jest opcjonalny, ale przydatny
-    }
-  });
-  if (error) alert(error.message);
-});
-
 
 let state = {
   worlds: [],
@@ -444,3 +375,74 @@ setupTopbar();
 setupBulk();
 renderAll();
 setInterval(tickResets, 30 * 1000);
+
+const REDIRECT_URL = 'https://granatos.github.io/planer-web/';
+
+const authStatusEl = document.getElementById('auth-status');
+const emailEl = document.getElementById('auth-email');
+const btnMagic = document.getElementById('btn-magic');
+const btnGoogle = document.getElementById('btn-google');
+const btnLogout = document.getElementById('btn-logout');
+const btnDiscord = document.getElementById('btn-discord');
+
+async function setAuthUI(user){
+  currentUser = user || null;
+  const meta = user?.user_metadata || {};
+  const label = user?.email || meta.full_name || meta.name || meta.user_name || 'Konto';
+  if (authStatusEl) authStatusEl.textContent = user ? label : 'Nie zalogowano';
+  if (btnLogout)  btnLogout.hidden  = !user;
+  if (btnMagic)   btnMagic.hidden   = !!user;
+  if (btnGoogle)  btnGoogle.hidden  = !!user;
+  if (btnDiscord) btnDiscord.hidden = !!user;
+  if (emailEl)    emailEl.hidden    = !!user;
+  if (user){
+    try { await upsertProfile?.(user); } catch(e){}
+    try { await loadPlannerData?.(); } catch(e){}
+  }
+}
+
+async function upsertProfile(user){
+  try{
+    if (!sb || !user) return;
+    const nick = (user.email || '').split('@')[0] || (user.user_metadata?.user_name) || 'User';
+    await sb.from('profiles').upsert({ id: user.id, display_name: nick });
+  }catch(e){ console.warn('upsertProfile error', e); }
+}
+
+btnMagic?.addEventListener('click', async () => {
+  if (!sb) return alert('Brak konfiguracji Supabase');
+  const email = emailEl?.value?.trim();
+  if (!email) return alert('Podaj email');
+  try{
+    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: REDIRECT_URL, shouldCreateUser: true }});
+    if (error){ console.error('signInWithOtp error:', error); alert(error.message); return; }
+    alert('Wysłano link logowania.');
+  }catch(e){ console.error(e); alert('Wyjątek podczas wysyłki.'); }
+});
+
+btnGoogle?.addEventListener('click', async () => {
+  if (!sb) return alert('Brak konfiguracji Supabase');
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: REDIRECT_URL }});
+  if (error) alert(error.message);
+});
+
+btnDiscord?.addEventListener('click', async () => {
+  if (!sb) return alert('Brak konfiguracji Supabase');
+  const { error } = await sb.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo: REDIRECT_URL, scopes: 'identify email' }});
+  if (error) alert(error.message);
+});
+
+btnLogout?.addEventListener('click', async () => { try{ await sb?.auth?.signOut(); }catch(e){} });
+
+if (sb){
+  sb.auth.onAuthStateChange((_event, session) => setAuthUI(session?.user || null));
+  sb.auth.getSession().then(({ data }) => setAuthUI(data?.session?.user || null));
+} else {
+  setAuthUI(null);
+}
+
+document.getElementById('btn-save-cloud')?.addEventListener('click', async () => {
+  if (!currentUser) { alert('Zaloguj się, aby zapisać w chmurze'); return; }
+  try { await savePlannerData?.(); alert('Zapisano w chmurze'); }
+  catch(e){ console.error(e); alert('Błąd zapisu – sprawdź konsolę'); }
+});
