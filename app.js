@@ -446,3 +446,94 @@ document.getElementById('btn-save-cloud')?.addEventListener('click', async () =>
   try { await savePlannerData?.(); alert('Zapisano w chmurze'); }
   catch(e){ console.error(e); alert('Błąd zapisu – sprawdź konsolę'); }
 });
+// ==== SAFE BOOTSTRAP (WKLEJ NA SAM KONIEC app.js) ====
+(function(){
+  function $id(id){ return document.getElementById(id); }
+
+  function wireAuthUI(){
+    const btnMagic   = $id('btn-magic');
+    const btnGoogle  = $id('btn-google');
+    const btnDiscord = $id('btn-discord');
+    const btnLogout  = $id('btn-logout');
+    const emailEl    = $id('auth-email');
+    const statusEl   = $id('auth-status');
+
+    // Prosty status, nawet bez Supabase:
+    function setStatus(txt){ if (statusEl) statusEl.textContent = txt; }
+
+    // Podpięcie listenerów z ochroną przed brakiem sb:
+    if (btnMagic) btnMagic.addEventListener('click', async () => {
+      try{
+        if (!window.sb) { alert('Brak konfiguracji logowania'); return; }
+        const email = (emailEl?.value || '').trim();
+        if (!email) { alert('Podaj e-mail'); return; }
+        const redirect = (typeof window.REDIRECT_URL !== 'undefined')
+          ? window.REDIRECT_URL
+          : (location.origin + '/');
+        const { error } = await window.sb.auth.signInWithOtp({
+          email,
+          options: { emailRedirectTo: redirect, shouldCreateUser: true }
+        });
+        if (error) { console.error(error); alert(error.message); return; }
+        alert('Wysłano link logowania (sprawdź skrzynkę / spam).');
+      }catch(e){ console.error(e); alert('Błąd logowania (szczegóły w konsoli).'); }
+    });
+
+    if (btnGoogle) btnGoogle.addEventListener('click', async () => {
+      try{
+        if (!window.sb) { alert('Brak konfiguracji logowania'); return; }
+        const redirect = window.REDIRECT_URL || (location.origin + '/');
+        const { error } = await window.sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: redirect }});
+        if (error) alert(error.message);
+      }catch(e){ console.error(e); alert('Błąd logowania Google.'); }
+    });
+
+    if (btnDiscord) btnDiscord.addEventListener('click', async () => {
+      try{
+        if (!window.sb) { alert('Brak konfiguracji logowania'); return; }
+        const redirect = window.REDIRECT_URL || (location.origin + '/');
+        const { error } = await window.sb.auth.signInWithOAuth({
+          provider:'discord',
+          options:{ redirectTo: redirect, scopes:'identify email' }
+        });
+        if (error) alert(error.message);
+      }catch(e){ console.error(e); alert('Błąd logowania Discord.'); }
+    });
+
+    if (btnLogout) btnLogout.addEventListener('click', async () => {
+      try{ await window.sb?.auth?.signOut(); setStatus('Nie zalogowano'); }
+      catch(e){ console.error(e); }
+    });
+
+    // Jeśli Supabase działa – pokaż realny status
+    if (window.sb) {
+      window.sb.auth.onAuthStateChange((_e, session) => {
+        const user = session?.user || null;
+        const meta = user?.user_metadata || {};
+        const label = user?.email || meta.full_name || meta.name || meta.user_name || 'Konto';
+        setStatus(user ? label : 'Nie zalogowano');
+      });
+      window.sb.auth.getSession().then(({data}) => {
+        const user = data?.session?.user || null;
+        const meta = user?.user_metadata || {};
+        const label = user?.email || meta.full_name || meta.name || meta.user_name || 'Konto';
+        setStatus(user ? label : 'Nie zalogowano');
+      });
+    } else {
+      setStatus('Nie zalogowano'); // brak konfiguracji Supabase
+    }
+
+    console.log('[BOOT] Listenery podłączone:', {
+      magic: !!btnMagic, google: !!btnGoogle, discord: !!btnDiscord, logout: !!btnLogout
+    });
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive'){
+    try { wireAuthUI(); } catch(e){ console.error('[BOOT] init error', e); }
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      try { wireAuthUI(); } catch(e){ console.error('[BOOT] init error', e); }
+    });
+  }
+})();
+
