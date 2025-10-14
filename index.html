@@ -137,7 +137,7 @@
   </footer>
 
   <script src="app.js"></script>
-  <script src="auth-cloud.js?v=sync4"></script>
+  <script src="auth-cloud.js?v=sync4x"></script>
 
 <script>
 window.addEventListener('error', e => {
@@ -149,6 +149,47 @@ window.addEventListener('unhandledrejection', e => {
 });
 </script>
 
+<script>
+(function initInlineLogger(){
+  function ready(fn){
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      fn();
+    } else {
+      document.addEventListener('DOMContentLoaded', fn, { once:true });
+    }
+  }
+  ready(function(){
+    try{
+      var box = document.getElementById('logbox');
+      if (!box){
+        box = document.createElement('div');
+        box.id = 'logbox';
+        box.style.cssText = 'position:fixed;left:8px;bottom:8px;right:8px;max-height:45vh;overflow:auto;background:#0b0b0b;color:#9ef;padding:8px;font:12px/1.4 monospace;z-index:2147483647;opacity:.95;border:1px solid #234;border-radius:8px';
+        document.body.appendChild(box);
+      }
+      function line(prefix, parts){
+        var d = document.createElement('div');
+        var txt = [prefix].concat([].map.call(parts, function(a){
+          try { return (typeof a === 'object') ? JSON.stringify(a) : String(a); }
+          catch(_) { return String(a); }
+        })).join(' ');
+        d.textContent = txt;
+        box.appendChild(d);
+        box.scrollTop = box.scrollHeight;
+      }
+      var _log = console.log, _warn = console.warn, _err = console.error;
+      console.log = function(){ line('[log]', arguments); _log.apply(console, arguments); };
+      console.warn = function(){ line('[warn]', arguments); _warn.apply(console, arguments); };
+      console.error = function(){ line('[err]', arguments); _err.apply(console, arguments); };
+      window.debugToast = function(){ line('[dbg]', arguments); };
+      window.clearLog = function(){ box.innerHTML=''; };
+      window.addEventListener('error', function(e){ line('[onerror]', [e.message, (e.filename||'')+':'+(e.lineno||'')]); });
+      window.addEventListener('unhandledrejection', function(e){ var r=e.reason; line('[unhandled]', [r?.message||String(r)]); });
+      console.log('[logger] ready');
+    }catch(e){ alert('Logger init error: '+e.message); }
+  });
+})();
+</script>
 
 
 </body>
