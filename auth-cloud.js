@@ -1,13 +1,10 @@
-// auth-cloud.js (sync5) — PURE JS (no <script> wrapper). Cloud = source of truth + Realtime.
-// Drop this file next to index.html and include it AFTER app.js.
+// auth-cloud.js (sync5) — PURE JS. Cloud source-of-truth + auto-save + Realtime.
 (() => {
   if (window.__AUTH_CLOUD_WIRED__) return; window.__AUTH_CLOUD_WIRED__ = true;
 
-  // --- CONFIG ---
   if (!window.REDIRECT_URL) window.REDIRECT_URL = 'https://granatos.github.io/planer-web/';
   const DEBOUNCE_MS = 1000;
 
-  // Helpers
   const $ = (id) => document.getElementById(id);
   const log = (...a) => console.log('[sync5]', ...a);
   const err = (...a) => console.error('[sync5]', ...a);
@@ -22,7 +19,6 @@
     } catch { return 'anon_'+Date.now(); }
   })();
 
-  // Supabase init
   (function initSupabase(){
     const url = window.SUPABASE_URL;
     const key = window.SUPABASE_ANON_KEY;
@@ -34,13 +30,14 @@
     log('supabase client ready, clientId=', CLIENT_ID);
   })();
 
-  // UI refs
   const emailEl   = $('auth-email');
   const statusEl  = $('auth-status');
   const btnMagic  = $('btn-magic');
   const btnGoogle = $('btn-google');
   const btnDiscord= $('btn-discord');
   const btnLogout = $('btn-logout');
+  const btnLoad   = $('btn-load-cloud');
+  const btnSave   = $('btn-save-cloud');
 
   function setStatus(user){
     const meta = user?.user_metadata || {};
@@ -53,7 +50,6 @@
     if (emailEl)    emailEl.hidden    = !!user;
   }
 
-  // Local cache helpers
   function setLocal(st){
     try { if (typeof window.STORAGE_KEY === 'string') localStorage.setItem(window.STORAGE_KEY, JSON.stringify(st)); } catch {}
   }
@@ -68,13 +64,11 @@
   }
   const jsonStable = (v) => { try { return JSON.stringify(v); } catch { return null; } };
 
-  // State
   let cloudLoaded = false;
   let savingTimer = null;
   let realtimeChan = null;
   let lastCloudJSON = null;
 
-  // Cloud save (UPSERT one row per user)
   async function saveCloud(){
     if (!window.sb || !window.currentUser) return;
     if (!cloudLoaded) return;
@@ -96,7 +90,6 @@
   }
   function scheduleSaveCloud(){ clearTimeout(savingTimer); savingTimer = setTimeout(saveCloud, DEBOUNCE_MS); }
 
-  // Cloud load
   async function loadCloud(){
     if (!window.sb || !window.currentUser) return;
     try {
@@ -131,7 +124,6 @@
     } catch (e) { err('load exception', e); }
   }
 
-  // Realtime subscribe
   async function subscribeRealtime(){
     try {
       if (realtimeChan) { window.sb.removeChannel(realtimeChan); realtimeChan = null; }
@@ -161,7 +153,6 @@
     } catch (e) { err('subscribe exception', e); }
   }
 
-  // Patch save() to auto-save
   (function patchSave(){
     const orig = window.save;
     window.save = function(){
@@ -172,7 +163,9 @@
     log('save() patched → auto cloud debounce');
   })();
 
-  // Auth buttons
+  btnLoad?.addEventListener('click', () => loadCloud());
+  btnSave?.addEventListener('click', () => saveCloud());
+
   btnMagic?.addEventListener('click', async () => {
     if (!window.sb) return alert('Brak konfiguracji Supabase');
     const email = (emailEl?.value || '').trim();
@@ -193,7 +186,6 @@
   });
   btnLogout?.addEventListener('click', async () => { try { await window.sb?.auth?.signOut(); } catch(e){ err(e); } });
 
-  // Session bootstrap
   if (window.sb){
     window.sb.auth.onAuthStateChange(async (_e, session) => {
       const user = session?.user || null;
