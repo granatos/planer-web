@@ -1,16 +1,14 @@
 /* ======================================================================
    auth-cloud.js  —  add-on (NIE nadpisuje Twojego app.js)
-   Wersja: sync3 (persistSession + retry na iOS/Safari)
-   Funkcje:
-   • Inicjalizacja Supabase (window.sb) – wymagane klucze w <head>
-   • Logowanie: Magic link / Discord / Google
-   • Status w UI
-   • Synchronizacja multi-device:
-       - 1 wiersz per user_id w `plans` (UPSERT onConflict:user_id)
-       - Cloud-wins po zalogowaniu (z porównaniem dat)
-       - Debounce zapisu ~1.2s i blokada zapisu przed pierwszym loadem
-       - Retry wczytania, gdy sesja „dogania” (Safari/iOS)
-   • Patchuje save(): timestamp + auto-zapis do chmury
+   Wersja: sync4 (poprawione porównanie czasu: local_changed vs cloud_updated)
+   Zmiany vs sync3:
+     • NIE nadpisujemy lokalnego znacznika przy wczytywaniu z chmury
+     • Trzymamy dwa znaczniki w localStorage:
+         __local_changed_at   – kiedy użytkownik ZMIENIŁ stan (ustawiane w save())
+         __cloud_synced_at    – kiedy ostatnio zsynchronizowano z serwerem (z updated_at)
+     • Wybór stanu:
+         if (cloudAt >= max(localChangedAt, localCloudAt)) → CLOUD wygrywa
+         else if (localChangedAt > cloudAt) → LOCAL wygrywa i jest wypychany do chmury
 ====================================================================== */
 
 (() => {
@@ -43,6 +41,8 @@
     } catch {}
   }
 
+  function getTs(s){ try { return s ? new Date(s).getTime() : 0; } catch { return 0; } }
+
   // --- Supabase init (global: window.sb) z persistSession ---
   (function initSupabase(){
     const url = window.SUPABASE_URL;
@@ -50,11 +50,7 @@
     if (typeof window.supabase === 'object' && url && key) {
       try {
         window.sb = window.supabase.createClient(url, key, {
-          auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: true
-          }
+          auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
         });
         log('supabase client ready');
       } catch(e){
@@ -98,13 +94,25 @@
     if (!cloudReady || syncingNow) return; // nie zapisuj zanim nie wczytasz chmury
     try {
       const payload = (typeof window.state !== 'undefined') ? window.state : {};
-      const { error } = await window.sb
+      // Nie dotykaj __cloud_synced_at tutaj – nadamy go na podstawie odpowiedzi
+      const { data, error } = await window.sb
         .from('plans')
         .upsert(
           { user_id: window.currentUser.id, payload, updated_at: nowIso() },
           { onConflict: 'user_id' }
-        );
-      if (error) err('[cloud save] error', error); else log('[cloud save] OK');
+        )
+        .select('updated_at')
+        .single(); // po upsercie dostaniemy 1 wiersz
+
+      if (error) { err('[cloud save] error', error); }
+      else {
+        // Zaktualizuj lokalny znacznik zsynchronizowania z chmurą
+        if (data?.updated_at && window.state && typeof window.state === 'object') {
+          window.state.__cloud_synced_at = data.updated_at;
+          setLocal(window.state);
+        }
+        log('[cloud save] OK @', data?.updated_at);
+      }
     } catch (e) { err('[cloud save] exception', e); }
   }
 
@@ -115,7 +123,7 @@
     cloudSaveTimer = setTimeout(savePlannerData, 1200);
   }
 
-  // --- Wczytanie z chmury (cloud-wins z porównaniem dat) + RETRY ---
+  // --- Wczytanie z chmury (cloud-wins z porównaniem dat) ---
   async function loadPlannerData() {
     if (!window.sb || !window.currentUser) return;
     try {
@@ -128,23 +136,33 @@
 
       const local = getLocal();
       const cloud = data?.payload || null;
-      const cloudAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
-      const localAt = local?.__updated_at ? new Date(local.__updated_at).getTime() : 0;
 
+      const cloudAt = getTs(data?.updated_at);
+      const localChangedAt = getTs(local?.__local_changed_at);   // kiedy user coś zmienił
+      const localCloudAt   = getTs(local?.__cloud_synced_at);    // kiedy ostatnio zsynchronizowano
+
+      // Decyzja:
+      // 1) jeśli chmura jest >= wszystkiego lokalnego → bierz CLOUD
+      // 2) jeśli lokalne zmiany są nowsze niż chmura → bierz LOCAL i wypchnij
       let chosen = null;
-      if (cloud && (!local || cloudAt >= localAt)) {
+      if (cloud && (cloudAt >= Math.max(localChangedAt, localCloudAt))) {
         chosen = cloud;
+        // Nie nadawaj __local_changed_at tutaj!
+        if (chosen && typeof chosen === 'object') chosen.__cloud_synced_at = data.updated_at || nowIso();
         log('[cloud load] using CLOUD', data?.updated_at);
       } else if (local) {
         chosen = local;
-        log('[cloud load] using LOCAL', local.__updated_at || '(no ts)');
-        // wypchnij lokalny do chmury jako najnowszy
-        cloudReady = true;  // pozwól na zapis
-        await savePlannerData();
+        log('[cloud load] using LOCAL (changed_at=', local.__local_changed_at, ', cloud_at=', local.__cloud_synced_at, ')');
+        // Jeżeli lokal jest nowszy -> wypchnij jako źródło prawdy
+        if (localChangedAt > cloudAt) {
+          cloudReady = true; // pozwól zapisać
+          await savePlannerData();
+        }
+      } else {
+        log('[cloud load] nothing to load yet');
       }
 
       if (chosen){
-        if (!chosen.__updated_at) chosen.__updated_at = nowIso(); // znacznik dla porównań
         window.state = chosen;
         if (typeof window.renderAll === 'function') window.renderAll();
         setLocal(window.state);
@@ -158,7 +176,7 @@
     }
   }
 
-  // --- Patch lokalnego save() (timestamp + debounce do chmury) ---
+  // --- Patch lokalnego save() (USTAW tylko __local_changed_at + debounce) ---
   (function patchSave(){
     const orig = window.save;
     window.save = function(){
@@ -166,13 +184,13 @@
       catch(e){ err('orig save error', e); }
       try {
         if (typeof window.state === 'object' && window.state) {
-          window.state.__updated_at = nowIso();
+          window.state.__local_changed_at = nowIso(); // tylko lokalna zmiana!
           setLocal(window.state);
         }
       } catch {}
       scheduleSaveCloud();
     };
-    log('[sync] save() patched with timestamp + cloud debounce');
+    log('[sync] save() patched (local_changed_at + cloud debounce)');
   })();
 
   // --- (Opcjonalnie) Upsert profilu (display_name) ---
@@ -240,7 +258,7 @@
         if (!window.currentUser) return alert('Zaloguj się');
         cloudReady = false;
         await loadPlannerData();
-        // szybki retry: czasem sesja dojdzie chwilę później (iOS/Safari)
+        // szybki retry po 800ms (na wypadek opóźnienia sesji, iOS/Safari)
         if (!window.state || Object.keys(window.state||{}).length === 0) {
           await new Promise(r => setTimeout(r, 800));
           await loadPlannerData();
