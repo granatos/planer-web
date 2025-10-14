@@ -316,6 +316,86 @@ window.addEventListener('unhandledrejection', e => {
   bar.querySelector('#dbg-roundtrip').onclick = roundtrip;
 })();
 </script>
+<script>
+(function(){
+  function ready(fn){
+    if (document.readyState === 'complete' || document.readyState === 'interactive') fn();
+    else document.addEventListener('DOMContentLoaded', fn, { once:true });
+  }
+  ready(function(){
+    var box = document.getElementById('logbox');
+    if (!box) return;
+
+    // Przenieś na górę i zwęż
+    box.style.top = '8px';
+    box.style.bottom = 'auto';
+    box.style.maxHeight = '35vh';
+    box.style.right = '8px';
+    box.style.left = '8px';
+
+    // Pasek narzędzi (collapse / close)
+    var bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+    var title = document.createElement('div');
+    title.textContent = 'Logger';
+    title.style.cssText = 'font-weight:bold;cursor:move;flex:1';
+    var btnCollapse = document.createElement('button');
+    btnCollapse.textContent = '↕';
+    btnCollapse.title = 'Zwiń/Rozwiń';
+    var btnClose = document.createElement('button');
+    btnClose.textContent = '✕';
+    btnClose.title = 'Zamknij';
+    bar.appendChild(title); bar.appendChild(btnCollapse); bar.appendChild(btnClose);
+    box.insertBefore(bar, box.firstChild);
+
+    // Zwijanie
+    var collapsed = false;
+    var contentWrap = document.createElement('div');
+    while (bar.nextSibling) contentWrap.appendChild(bar.nextSibling);
+    box.appendChild(contentWrap);
+    function applyCollapse(){
+      contentWrap.style.display = collapsed ? 'none' : '';
+      box.style.opacity = collapsed ? '0.8' : '0.95';
+    }
+    btnCollapse.onclick = function(){ collapsed = !collapsed; applyCollapse(); };
+    applyCollapse();
+
+    // Zamknięcie
+    btnClose.onclick = function(){ box.remove(); };
+
+    // Proste przeciąganie (touch + mouse)
+    (function drag(el, handle){
+      var sx=0, sy=0, ox=0, oy=0, dragging=false;
+      function start(e){
+        dragging = true;
+        var p = ('touches' in e) ? e.touches[0] : e;
+        sx = p.clientX; sy = p.clientY;
+        ox = el.offsetLeft; oy = el.offsetTop;
+        e.preventDefault();
+      }
+      function move(e){
+        if (!dragging) return;
+        var p = ('touches' in e) ? e.touches[0] : e;
+        var dx = p.clientX - sx, dy = p.clientY - sy;
+        el.style.left = Math.max(8, ox + dx) + 'px';
+        el.style.top  = Math.max(8, oy + dy) + 'px';
+        el.style.right = 'auto'; // po przeciągnięciu pozycjonuj lewą krawędzią
+      }
+      function end(){ dragging = false; }
+      handle.addEventListener('mousedown', start);
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', end);
+      handle.addEventListener('touchstart', start, {passive:false});
+      window.addEventListener('touchmove', move, {passive:false});
+      window.addEventListener('touchend', end);
+    })(box, title);
+
+    // Szybkie skróty
+    window.hideLogger = () => box.remove();
+    window.collapseLogger = () => { collapsed = true; applyCollapse(); };
+  });
+})();
+</script>
 
 
 </body>
