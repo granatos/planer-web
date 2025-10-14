@@ -1,29 +1,16 @@
 /* ======================================================================
    auth-cloud.js  —  add-on (NIE nadpisuje Twojego app.js)
+   Wersja: sync3 (persistSession + retry na iOS/Safari)
    Funkcje:
    • Inicjalizacja Supabase (window.sb) – wymagane klucze w <head>
    • Logowanie: Magic link / Discord / Google
-   • Status zalogowania w UI
-   • Synchronizacja „ten sam stan na wszystkich urządzeniach”
-       - 1 wiersz per user_id w tabeli `plans` (UPSERT onConflict:user_id)
-       - Cloud-wins: po zalogowaniu najpierw wczytujemy chmurę
-       - Debounce zapisu ~1.2s i blokada zapisu do czasu pierwszego wczytania
-       - Porównanie dat (cloud.updated_at vs local.__updated_at)
-       - Ręczne: „Załaduj z chmury” / „Zapisz w chmurze”
-   • Niedystrybutywny patch Twojej save(): dodaje timestamp + auto-zapis do chmury
-   Jak użyć:
-   1) W <head>:
-      <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-      <script>
-        window.SUPABASE_URL = "https://TWÓJ-REF.supabase.co";
-        window.SUPABASE_ANON_KEY = "ANON_KEY_Z_SUPABASE";
-      </script>
-   2) Na dole index.html (PO Twoim app.js):
-      <script src="app.js"></script>
-      <script src="auth-cloud.js?v=sync2"></script>
-   3) Supabase → Auth → URL Configuration:
-      Site URL i Redirect URLs: https://granatos.github.io/planer-web/
-   4) (Opcjonalnie) Discord → Redirect: https://TWÓJ-PROJEKT.supabase.co/auth/v1/callback
+   • Status w UI
+   • Synchronizacja multi-device:
+       - 1 wiersz per user_id w `plans` (UPSERT onConflict:user_id)
+       - Cloud-wins po zalogowaniu (z porównaniem dat)
+       - Debounce zapisu ~1.2s i blokada zapisu przed pierwszym loadem
+       - Retry wczytania, gdy sesja „dogania” (Safari/iOS)
+   • Patchuje save(): timestamp + auto-zapis do chmury
 ====================================================================== */
 
 (() => {
@@ -56,28 +43,38 @@
     } catch {}
   }
 
-  // --- Supabase init (global: window.sb) ---
+  // --- Supabase init (global: window.sb) z persistSession ---
   (function initSupabase(){
     const url = window.SUPABASE_URL;
     const key = window.SUPABASE_ANON_KEY;
     if (typeof window.supabase === 'object' && url && key) {
-      try { window.sb = window.supabase.createClient(url, key); log('supabase client ready'); }
-      catch(e){ err('supabase init failed', e); window.sb = null; }
+      try {
+        window.sb = window.supabase.createClient(url, key, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+          }
+        });
+        log('supabase client ready');
+      } catch(e){
+        err('supabase init failed', e); window.sb = null;
+      }
     } else {
       if (typeof window.sb === 'undefined') window.sb = null;
       warn('supabase not ready', { hasLib: typeof window.supabase, hasUrl: !!url, hasKey: !!key });
     }
   })();
 
-  // --- UI refs (opcjonalne – jeśli brak, kod i tak nie padnie) ---
-  const emailEl   = document.getElementById('auth-email');
-  const statusEl  = document.getElementById('auth-status');
-  const btnMagic  = document.getElementById('btn-magic');
-  const btnGoogle = document.getElementById('btn-google');
-  const btnDiscord= document.getElementById('btn-discord');
-  const btnLogout = document.getElementById('btn-logout');
-  const btnLoad   = document.getElementById('btn-load-cloud');
-  const btnSave   = document.getElementById('btn-save-cloud');
+  // --- UI refs ---
+  const emailEl   = $('auth-email');
+  const statusEl  = $('auth-status');
+  const btnMagic  = $('btn-magic');
+  const btnGoogle = $('btn-google');
+  const btnDiscord= $('btn-discord');
+  const btnLogout = $('btn-logout');
+  const btnLoad   = $('btn-load-cloud');
+  const btnSave   = $('btn-save-cloud');
 
   // --- Status UI ---
   function setStatus(user){
@@ -118,7 +115,7 @@
     cloudSaveTimer = setTimeout(savePlannerData, 1200);
   }
 
-  // --- Wczytanie z chmury (cloud-wins z porównaniem dat) ---
+  // --- Wczytanie z chmury (cloud-wins z porównaniem dat) + RETRY ---
   async function loadPlannerData() {
     if (!window.sb || !window.currentUser) return;
     try {
@@ -243,6 +240,11 @@
         if (!window.currentUser) return alert('Zaloguj się');
         cloudReady = false;
         await loadPlannerData();
+        // szybki retry: czasem sesja dojdzie chwilę później (iOS/Safari)
+        if (!window.state || Object.keys(window.state||{}).length === 0) {
+          await new Promise(r => setTimeout(r, 800));
+          await loadPlannerData();
+        }
         cloudReady = true;
         alert('Wczytano z chmury');
       });
@@ -267,6 +269,10 @@
         if (user) {
           await upsertProfile(user);
           await loadPlannerData();   // najpierw cloud
+          if (!window.state || Object.keys(window.state||{}).length === 0) {
+            await new Promise(r => setTimeout(r, 800)); // RETRY
+            await loadPlannerData();
+          }
           cloudReady = true;         // teraz można zapisywać
         }
       });
@@ -278,6 +284,10 @@
         if (user) {
           await upsertProfile(user);
           await loadPlannerData();
+          if (!window.state || Object.keys(window.state||{}).length === 0) {
+            await new Promise(r => setTimeout(r, 800)); // RETRY
+            await loadPlannerData();
+          }
           cloudReady = true;
         }
       });
