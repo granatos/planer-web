@@ -51,6 +51,10 @@
       <button id="btn-discord">Zaloguj Discord</button>
       <button id="btn-google">Zaloguj Google</button>
       <button id="btn-logout" hidden>Wyloguj</button>
+      <button id="btn-load-cloud">Załaduj z chmury</button>
+      <button id="btn-save-cloud">Zapisz w chmurze</button>
+      <button id="btn-force-cloud">Wymuś chmurę</button>
+      <button id="btn-dbg">Diag</button>
     </div>
   </div>
 
@@ -187,6 +191,48 @@ window.addEventListener('unhandledrejection', e => {
       window.addEventListener('unhandledrejection', function(e){ var r=e.reason; line('[unhandled]', [r?.message||String(r)]); });
       console.log('[logger] ready');
     }catch(e){ alert('Logger init error: '+e.message); }
+  });
+})();
+</script>
+<script>
+(function(){
+  // Diagnoza sesji + szybkie odczyty
+  document.getElementById('btn-dbg')?.addEventListener('click', async () => {
+    try{
+      const s = await (window.sb?.auth?.getSession?.() || Promise.resolve({data:null}));
+      const uid = s?.data?.session?.user?.id || null;
+      const localRaw = (typeof STORAGE_KEY==='string') ? localStorage.getItem(STORAGE_KEY) : null;
+      const local = localRaw ? JSON.parse(localRaw) : null;
+      console.log('[DBG] uid:', uid);
+      console.log('[DBG] local.__local_changed_at:', local?.__local_changed_at);
+      console.log('[DBG] local.__cloud_synced_at:', local?.__cloud_synced_at);
+      if (window.sb && uid){
+        const { data, error } = await window.sb.from('plans')
+          .select('updated_at')
+          .eq('user_id', uid).maybeSingle();
+        console.log('[DBG] cloud.updated_at:', data?.updated_at, 'error:', error?.message);
+      } else {
+        console.warn('[DBG] brak sb lub uid');
+      }
+    }catch(e){ console.error('[DBG] exception', e); }
+  });
+
+  // Wymuś CLOUD: zerujemy lokalne znaczniki, potem odpalamy load
+  document.getElementById('btn-force-cloud')?.addEventListener('click', async () => {
+    try{
+      if (typeof STORAGE_KEY==='string'){
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw){
+          const obj = JSON.parse(raw);
+          delete obj.__local_changed_at;
+          delete obj.__cloud_synced_at;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+        }
+      }
+      console.log('[FORCE] wyzerowano lokalne znaczniki; ładuję chmurę…');
+      if (window._authCloudLoad) await window._authCloudLoad();
+      console.log('[FORCE] chmura wczytana');
+    }catch(e){ console.error('[FORCE] exception', e); }
   });
 })();
 </script>
