@@ -1,4 +1,3 @@
-<script>
 (() => {
   if (window.__AUTH_CLOUD_WIRED__) return; window.__AUTH_CLOUD_WIRED__ = true;
 
@@ -246,4 +245,3 @@
     });
   }
 })();
-</script>
