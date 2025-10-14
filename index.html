@@ -139,6 +139,15 @@
   <script src="app.js"></script>
   <script src="auth-cloud.js?v=sync4"></script>
 
+<script>
+window.addEventListener('error', e => {
+  alert('JS error: ' + e.message + '\n' + (e.filename||'') + ':' + (e.lineno||''));
+});
+window.addEventListener('unhandledrejection', e => {
+  const r = e.reason;
+  alert('Promise error: ' + (r?.message || r));
+});
+</script>
 
 
 
