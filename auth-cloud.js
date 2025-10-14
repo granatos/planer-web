@@ -1,11 +1,13 @@
+// auth-cloud.js (sync5) — PURE JS (no <script> wrapper). Cloud = source of truth + Realtime.
+// Drop this file next to index.html and include it AFTER app.js.
 (() => {
   if (window.__AUTH_CLOUD_WIRED__) return; window.__AUTH_CLOUD_WIRED__ = true;
 
-  // --- KONFIG ---
+  // --- CONFIG ---
   if (!window.REDIRECT_URL) window.REDIRECT_URL = 'https://granatos.github.io/planer-web/';
   const DEBOUNCE_MS = 1000;
 
-  // --- Helpers ---
+  // Helpers
   const $ = (id) => document.getElementById(id);
   const log = (...a) => console.log('[sync5]', ...a);
   const err = (...a) => console.error('[sync5]', ...a);
@@ -14,13 +16,13 @@
     try {
       const k = localStorage.getItem(CLIENT_ID_KEY);
       if (k) return k;
-      const n = crypto?.randomUUID?.() || (Math.random().toString(36).slice(2)+Date.now());
+      const n = (crypto?.randomUUID?.() || (Math.random().toString(36).slice(2)+Date.now()));
       localStorage.setItem(CLIENT_ID_KEY, n);
       return n;
     } catch { return 'anon_'+Date.now(); }
   })();
 
-  // --- Supabase init (sesja trzymana automatycznie) ---
+  // Supabase init
   (function initSupabase(){
     const url = window.SUPABASE_URL;
     const key = window.SUPABASE_ANON_KEY;
@@ -32,7 +34,7 @@
     log('supabase client ready, clientId=', CLIENT_ID);
   })();
 
-  // --- UI refs (opcjonalne) ---
+  // UI refs
   const emailEl   = $('auth-email');
   const statusEl  = $('auth-status');
   const btnMagic  = $('btn-magic');
@@ -51,13 +53,9 @@
     if (emailEl)    emailEl.hidden    = !!user;
   }
 
-  // --- Cache lokalny (tylko pomocniczo) ---
+  // Local cache helpers
   function setLocal(st){
-    try {
-      if (typeof window.STORAGE_KEY === 'string') {
-        localStorage.setItem(window.STORAGE_KEY, JSON.stringify(st));
-      }
-    } catch {}
+    try { if (typeof window.STORAGE_KEY === 'string') localStorage.setItem(window.STORAGE_KEY, JSON.stringify(st)); } catch {}
   }
   function getLocal(){
     try {
@@ -68,24 +66,20 @@
     } catch {}
     return null;
   }
+  const jsonStable = (v) => { try { return JSON.stringify(v); } catch { return null; } };
 
-  // --- Stan subskrypcji realtime i debounce ---
-  let cloudLoaded = false;       // pierwsze wczytanie z chmury wykonane
+  // State
+  let cloudLoaded = false;
   let savingTimer = null;
   let realtimeChan = null;
-  let lastCloudJSON = null;      // ostatni JSON z chmury (string) do szybkiego porównania
+  let lastCloudJSON = null;
 
-  function jsonStable(v){
-    try { return JSON.stringify(v); } catch { return null; }
-  }
-
-  // --- Zapis do chmury (ONE-ROW-PER-USER, UPSERT) ---
+  // Cloud save (UPSERT one row per user)
   async function saveCloud(){
     if (!window.sb || !window.currentUser) return;
-    if (!cloudLoaded) return; // dopiero po pierwszym wczytaniu
+    if (!cloudLoaded) return;
     try {
       const payload = window.state ?? {};
-      // metadata żeby inne urządzenia mogły wykryć źródło
       payload.__last_saved_by = CLIENT_ID;
       payload.__last_saved_at = new Date().toISOString();
 
@@ -96,18 +90,13 @@
         .single();
 
       if (error) { err('save error', error); return; }
-      // zapamiętaj co mamy w chmurze, żeby nie robić zbędnych re-renderów
       lastCloudJSON = jsonStable(data?.payload ?? {});
       log('cloud saved');
     } catch (e) { err('save exception', e); }
   }
+  function scheduleSaveCloud(){ clearTimeout(savingTimer); savingTimer = setTimeout(saveCloud, DEBOUNCE_MS); }
 
-  function scheduleSaveCloud(){
-    clearTimeout(savingTimer);
-    savingTimer = setTimeout(saveCloud, DEBOUNCE_MS);
-  }
-
-  // --- Wczytanie z chmury (cloud → UI → cache) ---
+  // Cloud load
   async function loadCloud(){
     if (!window.sb || !window.currentUser) return;
     try {
@@ -121,39 +110,31 @@
 
       const cloud = data?.payload;
       if (cloud && typeof cloud === 'object') {
-        // jeśli to nasz własny świeżo zapisany stan, i tak nadpisujemy (source of truth = cloud)
         const cloudJSON = jsonStable(cloud);
-        if (cloudJSON !== lastCloudJSON) {
-          lastCloudJSON = cloudJSON;
-        }
+        if (cloudJSON !== lastCloudJSON) lastCloudJSON = cloudJSON;
         window.state = cloud;
         if (typeof window.renderAll === 'function') window.renderAll();
         setLocal(window.state);
         log('cloud loaded → applied');
       } else {
-        // brak rekordu: jeśli masz lokalny, wypchnij go w górę; jeśli nie – zostaw pusty
         const local = getLocal();
         if (local) {
           window.state = local;
           if (typeof window.renderAll === 'function') window.renderAll();
           log('no cloud row, used LOCAL and push up');
-          // wypchniemy go do chmury:
           await saveCloud();
         } else {
           log('no cloud row, no local; starting empty');
         }
       }
-
       cloudLoaded = true;
     } catch (e) { err('load exception', e); }
   }
 
-  // --- Realtime: nasłuchuj zmian swojego wiersza z innych urządzeń ---
+  // Realtime subscribe
   async function subscribeRealtime(){
     try {
-      // cleanup
       if (realtimeChan) { window.sb.removeChannel(realtimeChan); realtimeChan = null; }
-
       const uid = window.currentUser?.id;
       if (!uid) return;
 
@@ -165,7 +146,6 @@
               try {
                 const newPayload = pay?.new?.payload;
                 if (!newPayload) return;
-                // jeśli update pochodzi z nas (CLIENT_ID), ignoruj
                 if (newPayload.__last_saved_by === CLIENT_ID) return;
                 const incoming = jsonStable(newPayload);
                 if (incoming && incoming !== lastCloudJSON) {
@@ -181,7 +161,7 @@
     } catch (e) { err('subscribe exception', e); }
   }
 
-  // --- Patch save() żeby auto-zapis działał z debounce ---
+  // Patch save() to auto-save
   (function patchSave(){
     const orig = window.save;
     window.save = function(){
@@ -192,7 +172,7 @@
     log('save() patched → auto cloud debounce');
   })();
 
-  // --- Logowanie przyciski ---
+  // Auth buttons
   btnMagic?.addEventListener('click', async () => {
     if (!window.sb) return alert('Brak konfiguracji Supabase');
     const email = (emailEl?.value || '').trim();
@@ -208,14 +188,12 @@
     if (error) alert(error.message);
   });
   btnDiscord?.addEventListener('click', async () => {
-    const { error } = await window.sb.auth.signInWithOAuth({
-      provider: 'discord', options: { redirectTo: window.REDIRECT_URL, scopes: 'identify email' }
-    });
+    const { error } = await window.sb.auth.signInWithOAuth({ provider: 'discord', options: { redirectTo: window.REDIRECT_URL, scopes: 'identify email' }});
     if (error) alert(error.message);
   });
   btnLogout?.addEventListener('click', async () => { try { await window.sb?.auth?.signOut(); } catch(e){ err(e); } });
 
-  // --- Sesja: po zalogowaniu 1) load z chmury 2) realtime 3) włącz auto-zapis ---
+  // Session bootstrap
   if (window.sb){
     window.sb.auth.onAuthStateChange(async (_e, session) => {
       const user = session?.user || null;
@@ -223,16 +201,12 @@
       setStatus(user);
       if (user) {
         cloudLoaded = false;
-        await loadCloud();       // nadpisz lokalny stan chmurą
+        await loadCloud();
         await subscribeRealtime();
-        // auto-zapis już włączony przez patch save(), cloudLoaded=true po loadCloud()
       } else {
-        // logout: wyczyść subskrypcję
         if (realtimeChan) { window.sb.removeChannel(realtimeChan); realtimeChan = null; }
       }
     });
-
-    // przy pierwszym wejściu spróbuj przywrócić sesję
     window.sb.auth.getSession().then(async ({data}) => {
       const user = data?.session?.user || null;
       window.currentUser = user;
