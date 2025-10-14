@@ -5,6 +5,35 @@ const MAPA_VALUES = ["Ocean 3","Wirtual 1","Wirtual 2","Wirtual 3","Mars 1","Mar
 const EPOKA_VALUES = ["Pas","Wenus","Jowisz","Tytan","Węzeł"];
 const DIAMOND_COSTS = [4000,4200,4400,4600,4800,5200,5600,6000,6400,6800,7200,7600,8000,8800,9600,10400,11200,12000,12800,13600];
 const STORAGE_KEY = "planer_web_v1";
+const REDIRECT_URL = 'https://granatos.github.io/planer-web/'; // ważny trailing slash
+
+const SUPABASE_URL = window.SUPABASE_URL;
+const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY;
+const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const authStatusEl = document.getElementById('auth-status');
+
+function setAuthUI(user){
+  if (!authStatusEl) return;
+  authStatusEl.textContent = user ? (user.email || '(konto)') : 'Nie zalogowano';
+}
+
+if (sb){
+  sb.auth.onAuthStateChange((_e, session) => setAuthUI(session?.user || null));
+  sb.auth.getSession().then(({data}) => setAuthUI(data?.session?.user || null));
+} else {
+  setAuthUI(null);
+}
+
+btnMagic?.addEventListener('click', async () => {
+  const email = document.getElementById('auth-email').value.trim();
+  if (!email) return alert('Podaj email');
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: REDIRECT_URL }});
+  if (error) return alert(error.message);
+  alert('Sprawdź skrzynkę – wysłałem link logowania.');
+});
+
+
 
 let state = {
   worlds: [],
