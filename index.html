@@ -17,6 +17,28 @@
 </script>
 
 </head>
+
+<script>
+(function(){
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:8px;bottom:8px;right:8px;max-height:45vh;overflow:auto;background:#111;color:#0f0;padding:8px;font:12px/1.4 monospace;z-index:99999;opacity:.95;border-radius:8px';
+  box.id = 'logbox';
+  document.body.appendChild(box);
+  function append(prefix, args){
+    const line = document.createElement('div');
+    line.textContent = prefix + ' ' + Array.from(args).map(a => {
+      try { return typeof a==='object' ? JSON.stringify(a) : String(a); } catch(_) { return String(a); }
+    }).join(' ');
+    box.appendChild(line);
+  }
+  const _log = console.log, _warn = console.warn, _err = console.error;
+  console.log = function(){ append('[log]', arguments); _log.apply(console, arguments); };
+  console.warn = function(){ append('[warn]', arguments); _warn.apply(console, arguments); };
+  console.error = function(){ append('[err]', arguments); _err.apply(console, arguments); };
+  window.clearLog = () => box.innerHTML = '';
+})();
+</script>
+
 <body>
   <!-- Pasek logowania -->
   <div id="authbar" class="topbar authbar">
