@@ -1,20 +1,41 @@
-/* ========================================================================
-   auth-cloud.js (add-on, non-destructive)
-   - Do NOT edit your existing app.js.
-   - Include this file AFTER app.js in index.html.
-   - It wires Supabase auth (Discord/Google/Magic Link) and per-user cloud save/load.
-=========================================================================== */
+/* ======================================================================
+   auth-cloud.js  —  add-on (nie nadpisuje Twojego app.js)
+   Funkcje:
+   - Inicjalizacja Supabase jako window.sb (wymaga kluczy w <head>)
+   - Logowanie: Magic link / Discord / Google
+   - Status UI
+   - Synchronizacja stanu per użytkownik (UPSERT po user_id)
+   - Auto-zapis z debounce + przyciski "Załaduj z chmury" / "Zapisz w chmurze"
+   - Patchuje lokalne save() nieinwazyjnie
+   Jak użyć:
+   1) W <head> index.html:
+      <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+      <script>
+        window.SUPABASE_URL = "https://TWÓJ-REF.supabase.co";
+        window.SUPABASE_ANON_KEY = "ANON_KEY_Z_SUPABASE";
+      </script>
+   2) Wstaw ZA app.js:
+      <script src="app.js"></script>
+      <script src="auth-cloud.js?v=upsert1"></script>
+   3) W Supabase → Auth → URL Configuration:
+      Site URL:     https://granatos.github.io/planer-web/
+      Redirect URLs: https://granatos.github.io/planer-web/
+   4) Discord (opcjonalnie) → Redirect: https://TWÓJ-PROJEKT.supabase.co/auth/v1/callback
+====================================================================== */
 
 (() => {
-  // Stable redirect for GitHub Pages
+  if (window.__AUTH_CLOUD_WIRED__) return; window.__AUTH_CLOUD_WIRED__ = true;
+
+  // Stały redirect
   if (!window.REDIRECT_URL) window.REDIRECT_URL = 'https://granatos.github.io/planer-web/';
 
+  // --- Helpers
   const $ = (id) => document.getElementById(id);
-  const log = (...a) => console.log('[auth+cloud]', ...a);
-  const warn = (...a) => console.warn('[auth+cloud]', ...a);
-  const err = (...a) => console.error('[auth+cloud]', ...a);
+  const log = (...a) => console.log('[auth-cloud]', ...a);
+  const warn = (...a) => console.warn('[auth-cloud]', ...a);
+  const err = (...a) => console.error('[auth-cloud]', ...a);
 
-  // Initialize Supabase client if keys + library exist
+  // --- Supabase init (global: window.sb)
   (function initSupabase(){
     const url = window.SUPABASE_URL;
     const key = window.SUPABASE_ANON_KEY;
@@ -27,15 +48,17 @@
     }
   })();
 
-  // UI references (optional)
+  // --- UI refs (opcjonalne)
   const emailEl   = $('auth-email');
   const statusEl  = $('auth-status');
   const btnMagic  = $('btn-magic');
   const btnGoogle = $('btn-google');
   const btnDiscord= $('btn-discord');
   const btnLogout = $('btn-logout');
-  const btnSaveCloud = $('btn-save-cloud');
+  const btnLoad   = $('btn-load-cloud');
+  const btnSave   = $('btn-save-cloud');
 
+  // --- Status UI
   function setStatus(user){
     const meta = user?.user_metadata || {};
     const label = user?.email || meta.full_name || meta.name || meta.user_name || 'Konto';
@@ -47,14 +70,19 @@
     if (emailEl)    emailEl.hidden    = !!user;
   }
 
-  // Cloud save/load
+  // --- Cloud storage (1 wiersz per user_id; UPSERT)
   let cloudSaveTimer = null;
 
   async function savePlannerData() {
     if (!window.sb || !window.currentUser) return;
     try {
       const payload = (typeof window.state !== 'undefined') ? window.state : {};
-      const { error } = await window.sb.from('plans').insert({ user_id: window.currentUser.id, payload });
+      const { error } = await window.sb
+        .from('plans')
+        .upsert(
+          { user_id: window.currentUser.id, payload, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id' }
+        );
       if (error) err('[cloud save] error', error); else log('[cloud save] OK');
     } catch (e) { err('[cloud save] exception', e); }
   }
@@ -69,10 +97,8 @@
     try {
       const { data, error } = await window.sb
         .from('plans')
-        .select('payload')
+        .select('payload, updated_at')
         .eq('user_id', window.currentUser.id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
         .maybeSingle();
       if (error && error.code !== 'PGRST116') { err('[cloud load] error', error); return; }
       if (data?.payload) {
@@ -81,24 +107,24 @@
         if (typeof window.STORAGE_KEY === 'string') {
           try { localStorage.setItem(window.STORAGE_KEY, JSON.stringify(window.state)); } catch {}
         }
-        log('[cloud load] applied');
+        log('[cloud load] applied @', data.updated_at);
       } else {
-        log('[cloud load] no snapshot (ok)');
+        log('[cloud load] no row yet (first login)');
       }
     } catch (e) { err('[cloud load] exception', e); }
   }
 
-  // Non-destructive patch: wrap existing save() if present; otherwise create a stub
+  // --- Patch local save() (non-destructive)
   (function patchSave(){
     const orig = window.save;
     window.save = function(){
       try { if (typeof orig === 'function') orig.apply(this, arguments); } catch(e){ err('orig save error', e); }
       try { scheduleSaveCloud(); } catch(e){ err('scheduleSaveCloud error', e); }
     };
-    log('save() patched for cloud (non-destructive)');
+    log('save() patched → cloud debounce');
   })();
 
-  // Optional: profile upsert
+  // --- Optional profile
   async function upsertProfile(user){
     try {
       if (!window.sb || !user) return;
@@ -107,7 +133,7 @@
     } catch(e){ warn('upsertProfile', e); }
   }
 
-  // Wire buttons (idempotent)
+  // --- Wire buttons (idempotent)
   function wire(){
     if (btnMagic && !btnMagic.dataset.wired){
       btnMagic.dataset.wired = '1';
@@ -157,15 +183,25 @@
       });
     }
 
-    if (btnSaveCloud && !btnSaveCloud.dataset.wired){
-      btnSaveCloud.dataset.wired = '1';
-      btnSaveCloud.addEventListener('click', async () => {
+    if (btnLoad && !btnLoad.dataset.wired){
+      btnLoad.dataset.wired = '1';
+      btnLoad.addEventListener('click', async () => {
+        if (!window.currentUser) return alert('Zaloguj się');
+        await loadPlannerData();
+        alert('Wczytano z chmury');
+      });
+    }
+
+    if (btnSave && !btnSave.dataset.wired){
+      btnSave.dataset.wired = '1';
+      btnSave.addEventListener('click', async () => {
         if (!window.currentUser) return alert('Zaloguj się');
         await savePlannerData();
         alert('Zapisano w chmurze');
       });
     }
 
+    // Sesja → status + wczytanie stanu
     if (window.sb){
       window.sb.auth.onAuthStateChange(async (_e, session) => {
         const user = session?.user || null;
@@ -183,7 +219,7 @@
       setStatus(null);
     }
 
-    log('wired', { magic: !!btnMagic, google: !!btnGoogle, discord: !!btnDiscord, logout: !!btnLogout });
+    log('wired', { magic: !!btnMagic, google: !!btnGoogle, discord: !!btnDiscord, logout: !!btnLogout, load: !!btnLoad, save: !!btnSave });
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') wire();
