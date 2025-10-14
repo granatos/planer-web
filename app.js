@@ -377,26 +377,6 @@ renderAll();
 setInterval(tickResets, 30 * 1000);
 
 
-// ===== AUTH BOOTSTRAP (compact, idempotent) =====
-(() => {
-  if (window.__AUTH_BOOT_WIRED__) return;
-  window.__AUTH_BOOT_WIRED__ = true;
-
-  // Stable redirect (GitHub Pages)
-  if (!window.REDIRECT_URL) window.REDIRECT_URL = 'https://granatos.github.io/planer-web/';
-
-  // Init Supabase client safely and expose as window.sb
-  (function initSupabase(){
-    const url = window.SUPABASE_URL;
-    const key = window.SUPABASE_ANON_KEY;
-    if (typeof window.supabase === 'object' && url && key) {
-      try { window.sb = window.supabase.createClient(url, key); console.log('[supabase] client ready'); }
-      catch(e){ console.warn('[supabase] init failed', e); window.sb = null; }
-    } else {
-      if (typeof window.sb === 'undefined') window.sb = null;
-    }
-  })();
-
   function $(id){ return document.getElementById(id); }
   const emailEl   = $('auth-email');
   const statusEl  = $('auth-status');
