@@ -1,4 +1,4 @@
-/* styles.css — minimum */
+/* styles.css — minimalistyczny wygląd */
 * { box-sizing: border-box; }
 body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0e0f12; color:#eef; }
 
@@ -9,7 +9,7 @@ body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial
 .topbar button:hover { filter: brightness(1.1); }
 .authbar { position:sticky; top:0; z-index:10; }
 
-.grid { display:grid; grid-template-columns: 90px 160px repeat(17, minmax(100px, 1fr)); gap:6px; padding:8px 12px; }
+.grid { display:grid; grid-template-columns: 90px 160px repeat(17, minmax(120px, 1fr)); gap:6px; padding:8px 12px; }
 .groups { background:#0f1320; color:#9db4ff; border-bottom:1px solid #222a; text-transform:uppercase; letter-spacing:.05em; font-size:12px; }
 .headers { background:#0b0f1a; color:#a7b1c2; border-bottom:1px solid #222a; font-weight:600; }
 .row input[type="text"] { width:100%; background:#0e1320; color:#eef; border:1px solid #273145; padding:6px 8px; border-radius:6px; }

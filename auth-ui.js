@@ -1,7 +1,4 @@
-// auth-ui.js — lekkie podpięcie przycisków logowania (Discord/Google/Magic) + status.
-// Nie dotyka Twojej logiki, tylko korzysta z istniejącego window.sb i window.REDIRECT_URL.
-// Wczytaj TEN plik po app.js i po auth-cloud.js (compat/sync5).
-
+// auth-ui.js — podpina przyciski logowania i status (bez ingerencji w logikę app)
 (() => {
   if (window.__AUTH_UI_WIRED__) return; window.__AUTH_UI_WIRED__ = true;
 
@@ -24,64 +21,31 @@
     if (emailEl)    emailEl.hidden    = !!user;
   }
 
-  function guardSb(){
-    if (!window.sb || !window.sb.auth) {
-      alert('Brak konfiguracji Supabase (sprawdź SUPABASE_URL/ANON_KEY i skrypt supabase-js).');
-      return false;
-    }
-    return true;
-  }
+  function ok(){ return window.sb?.auth || (alert('Brak Supabase (URL/KEY).'),0); }
 
-  // Podpięcie przycisków (idempotentne)
-  btnMagic && !btnMagic.dataset.wired && (btnMagic.dataset.wired = '1',
-    btnMagic.addEventListener('click', async () => {
-      if (!guardSb()) return;
-      const email = (emailEl?.value || '').trim();
-      if (!email) return alert('Podaj e-mail');
-      const { error } = await sb.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: window.REDIRECT_URL || location.origin, shouldCreateUser: true }
-      });
-      if (error) return alert(error.message);
-      alert('Wysłano link logowania (sprawdź skrzynkę/spam).');
-    })
-  );
+  btnMagic?.addEventListener('click', async () => {
+    if (!ok()) return;
+    const email=(emailEl?.value||'').trim(); if (!email) return alert('Podaj e-mail');
+    const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: window.REDIRECT_URL, shouldCreateUser:true }});
+    if (error) alert(error.message); else alert('Wysłano link (sprawdź skrzynkę/spam).');
+  });
 
-  btnGoogle && !btnGoogle.dataset.wired && (btnGoogle.dataset.wired = '1',
-    btnGoogle.addEventListener('click', async () => {
-      if (!guardSb()) return;
-      const { error } = await sb.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: window.REDIRECT_URL || location.origin }
-      });
-      if (error) alert(error.message);
-    })
-  );
+  btnGoogle?.addEventListener('click', async () => {
+    if (!ok()) return;
+    const { error } = await sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.REDIRECT_URL }});
+    if (error) alert(error.message);
+  });
 
-  btnDiscord && !btnDiscord.dataset.wired && (btnDiscord.dataset.wired = '1',
-    btnDiscord.addEventListener('click', async () => {
-      if (!guardSb()) return;
-      const { error } = await sb.auth.signInWithOAuth({
-        provider: 'discord',
-        options: { redirectTo: window.REDIRECT_URL || location.origin, scopes: 'identify email' }
-      });
-      if (error) alert(error.message);
-    })
-  );
+  btnDiscord?.addEventListener('click', async () => {
+    if (!ok()) return;
+    const { error } = await sb.auth.signInWithOAuth({ provider:'discord', options:{ redirectTo: window.REDIRECT_URL, scopes:'identify email' }});
+    if (error) alert(error.message);
+  });
 
-  btnLogout && !btnLogout.dataset.wired && (btnLogout.dataset.wired = '1',
-    btnLogout.addEventListener('click', async () => {
-      try { await sb?.auth?.signOut(); } catch (e) { console.error(e); }
-    })
-  );
+  btnLogout?.addEventListener('click', async () => { try{ await sb?.auth?.signOut(); } catch(e){ console.error(e); } });
 
-  // Reakcja na zmiany sesji (tylko status + widoczność guzików)
-  if (window.sb?.auth) {
-    sb.auth.onAuthStateChange((_e, session) => setStatus(session?.user || null));
-    sb.auth.getSession().then(({data}) => setStatus(data?.session?.user || null));
-  } else {
-    setStatus(null);
-  }
+  sb?.auth?.onAuthStateChange?.((_e, s)=>setStatus(s?.user||null));
+  sb?.auth?.getSession?.().then(({data})=>setStatus(data?.session?.user||null));
 
   console.log('[auth-ui] wired', {
     magic: !!btnMagic, google: !!btnGoogle, discord: !!btnDiscord, logout: !!btnLogout

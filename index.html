@@ -1,28 +1,23 @@
 <!doctype html>
 <html lang="pl">
 <head>
-<script>
-// Zablokuj stary bootstrap, jeśli się gdzieś jeszcze ładuje:
-window.__AUTH_BOOT_WIRED__ = true;   // jego guard – widząc to, nie uruchomi się
-</script>
-
   <meta charset="utf-8" />
   <title>Planer Światów (Web)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Supabase JS -->
+  <!-- Supabase JS (wymagane dla logowania i chmury) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    // 🔧 UZUPEŁNIJ: Twoje dane z Supabase
+    // 🔧 UZUPEŁNIJ SWOIMI DANYMI Z SUPABASE (Auth → Settings → URL + anon key)
     window.SUPABASE_URL = "https://yqfclvxnljaxsqigegiy.supabase.co";
     window.SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxZmNsdnhubGpheHNxaWdlZ2l5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyOTMyMzYsImV4cCI6MjA3NTg2OTIzNn0.qGaoIXyfvZP3xIrcNwFIgtWh3eJDwV1AfO_xtFENGEw";
-    // Stały redirect dla OAuth (GitHub Pages)
+    // Stały redirect dla OAuth (Discord/Google) na GitHub Pages
     window.REDIRECT_URL = "https://granatos.github.io/planer-web/";
   </script>
 </head>
 <body>
-  <!-- Pasek logowania -->
+  <!-- Pasek logowania (UI nieinwazyjny) -->
   <div id="authbar" class="topbar authbar">
     <div class="left">
       <strong>Status:</strong> <span id="auth-status">Nie zalogowano</span>
@@ -55,9 +50,6 @@ window.__AUTH_BOOT_WIRED__ = true;   // jego guard – widząc to, nie uruchomi 
       </label>
       <button id="btn-restore">Przywróć</button>
       <button id="btn-export">Zapisz CSV</button>
-      <!-- Przyciski chmury -->
-      <button id="btn-load-cloud">Załaduj z chmury</button>
-      <button id="btn-save-cloud">Zapisz w chmurze</button>
     </div>
   </header>
 
@@ -99,7 +91,7 @@ window.__AUTH_BOOT_WIRED__ = true;   // jego guard – widząc to, nie uruchomi 
   <!-- Wiersze -->
   <main id="rows"></main>
 
-  <!-- Masowe akcje -->
+  <!-- Masowe akcje (przykład, możesz rozwinąć) -->
   <footer class="bulkbar">
     <span>Masowo:</span>
     <select id="bulk-target">
@@ -119,10 +111,9 @@ window.__AUTH_BOOT_WIRED__ = true;   // jego guard – widząc to, nie uruchomi 
     <button id="bulk-apply">Ustaw dla widocznych</button>
   </footer>
 
-    <script src="app.js?v=ok1"></script>
-    <script src="auth-cloud.js?v=compat1"></script>  <!-- nasz sync (compat), nie rusza UI -->
-    <script src="auth-ui.js?v=ui1"></script>        <!-- TYLKO podpina przyciski -->
-
-
+  <!-- Kolejność ma znaczenie -->
+  <script src="app.js?v=clean1"></script>
+  <script src="auth-cloud.js?v=compat1"></script>
+  <script src="auth-ui.js?v=ui1"></script>
 </body>
 </html>

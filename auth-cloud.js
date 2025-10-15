@@ -1,11 +1,9 @@
-// auth-cloud.js — COMPACT COMPAT (nie rusza Twojego UI, używa istniejącego sb)
-// Założenia: Twój app.js tworzy window.sb (lub masz <script src="supabase-js"> + okno sb).
+// auth-cloud.js — COMPAT: sync do chmury bez dotykania UI/przycisków
 (() => {
   if (window.__SYNC5_COMPAT__) return; window.__SYNC5_COMPAT__ = true;
   const log = (...a)=>console.log('[sync5-compat]',...a);
   const err = (...a)=>console.error('[sync5-compat]',...a);
 
-  // ⚙️ 1) Użyj istniejącego klienta, a jeśli go nie ma – utwórz:
   (function ensureSb(){
     if (window.sb?.auth) { log('using existing sb client'); return; }
     const url = window.SUPABASE_URL, key = window.SUPABASE_ANON_KEY;
@@ -13,12 +11,11 @@
     window.sb = window.supabase.createClient(url, key, {
       auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
     });
-    log('created sb client (compat)');
+    log('created sb client');
   })();
 
   if (!window.sb?.auth) { err('sb not ready'); return; }
 
-  // 🔑 2) NIE DOTYKAMY DOM-u. Tylko sync.
   const CLIENT_ID_KEY='planner_client_id';
   const CLIENT_ID = (()=>{ try{
       const k=localStorage.getItem(CLIENT_ID_KEY); if (k) return k;
@@ -26,12 +23,10 @@
       localStorage.setItem(CLIENT_ID_KEY, n); return n;
     }catch{ return 'anon_'+Date.now(); } })();
 
-  // Local helpers
   const jsonStable = v => { try{return JSON.stringify(v);}catch{return null;} };
   function setLocal(st){ try{ if (typeof window.STORAGE_KEY==='string') localStorage.setItem(window.STORAGE_KEY, JSON.stringify(st)); }catch{} }
   function getLocal(){ try{ if (typeof window.STORAGE_KEY==='string'){ const raw=localStorage.getItem(window.STORAGE_KEY); return raw?JSON.parse(raw):null; } }catch{} return null; }
 
-  // 🔄 3) Sync core
   let cloudLoaded=false, lastCloudJSON=null, saveTimer=null, chan=null;
   const DEBOUNCE_MS = 1000;
 
@@ -85,7 +80,7 @@
         .on('postgres_changes', {event:'*', schema:'public', table:'plans', filter:`user_id=eq.${uid}`}, (pay)=>{
           try{
             const p = pay?.new?.payload; if (!p) return;
-            if (p.__last_saved_by === CLIENT_ID) return; // ignoruj własne
+            if (p.__last_saved_by === CLIENT_ID) return;
             const inc = jsonStable(p);
             if (inc && inc !== lastCloudJSON){
               lastCloudJSON = inc;
@@ -100,19 +95,16 @@
     }catch(e){ err('subscribe ex', e); }
   }
 
-  // 🧩 4) Delikatny hook na Twoje save() (nie zmienia logiki)
   (function hookSave(){
     const orig = window.save;
     window.save = function(){
       try{ if (typeof orig==='function') orig.apply(this, arguments); }catch(e){ err('orig save', e); }
       try{ setLocal(window.state); }catch{}
-      scheduleSave(); // tylko dopina zapis do chmury
+      scheduleSave();
     };
     log('hooked save() with debounce');
   })();
 
-  // 👤 5) Sesja – nic nie dotykamy w UI, tylko reagujemy
-  if (window.__SYNC5_AUTH_BOUND__) return; window.__SYNC5_AUTH_BOUND__ = true;
   sb.auth.onAuthStateChange(async (_e, session) => {
     window.currentUser = session?.user || null;
     if (window.currentUser){ cloudLoaded=false; await loadCloud(); await subscribeRealtime(); }
