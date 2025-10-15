@@ -1,27 +1,19 @@
-// Planer V2 – Tabela, zgodnie z wymaganiami
-// - Tabela: jeden wiersz = jeden świat (porównywanie jak V1)
-// - Epoka i Mapa niezależne (mapa z globalnej listy)
-// - Tłumaczenia: Zbiory, Eventy, NK -> „Zbiory/budowa”
-// - Pakiety liczone z monet wg DIAMOND_COSTS; S > 20 koszt = 13600; Z max 20
-// - Resety: dzienny (GPC Trial/Opór/Koniec), rundy (S 14d, Z 84d), NK 10h od zaznaczenia, WG wt 08:00
+// Planer V2 – Tabela (fixed widths), uproszczone nazwy epok, GPC Czerwony/Niebieski
 
 const STORAGE_KEY = "planer-v2-state";
 
-// Epoki (PL snapshot)
+// Epoki – skrócone polskie etykiety
 const EPOCHS = [
-  "Epoka Kamienia","Epoka Brązu","Epoka Żelaza",
-  "Wczesne Średniowiecze","Rozkwit Średniowiecza","Jesień Średniowiecza",
-  "Epoka Kolonialna","Epoka Przemysłowa","Epoka Postępowa","Modernizm",
-  "Epoka Jutra","Epoka Oceaniczna","Epoka Wirtualna",
-  "Epoka Pasa","Epoka Marsa","Epoka Wenus","Księżyc Jowisza","Epoka Tytana"
+  "Kamień","Brąz","Żelazo",
+  "Wcz. Śred.","Rozkwit Śr.","Jesień Śr.",
+  "Kolonialna","Przemysłowa","Postępowa","Modernizm",
+  "Jutra","Oceaniczna","Wirtualna",
+  "Pas","Mars","Wenus","Księżyc Jowisza","Tytan"
 ];
 
-// Globalna lista map (niezależna od epoki).
-// Zawiera nazwy epok + mapy szczegółowe z V1.
+// Globalne mapy – można wybrać dowolną niezależnie od epoki
 const MAPS = [
-  // bazowe (epoki jako mapy)
   ...EPOCHS,
-  // szczegółowe serie
   "Ocean 1","Ocean 2","Ocean 3",
   "Wirtual 1","Wirtual 2","Wirtual 3",
   "Pas 1","Pas 2",
@@ -33,7 +25,7 @@ const MAPS = [
 
 const EVENT_MODES = ["Łączenie kluczy","Event letni/zimowy","Patryk/Drużynowy","Zbijanie/Klocki"];
 
-// Koszty pakietów (1..20); po 20 dla srebrnych koszt 13600, dla złotych limit 20
+// Koszty pakietów 1..20; po 20 (tylko srebrne) koszt 13600; złote max 20
 const DIAMOND_COSTS = [4000,4200,4400,4600,4800,5200,5600,6000,6400,6800,7200,7600,8000,8800,9600,10400,11200,12000,12800,13600];
 
 // Rundy
@@ -56,6 +48,7 @@ const defaultWorld = (name)=> ({
   trial: "",
   opor: "",
   koniec: false,
+  gpcColor: "", // "Czerwony" | "Niebieski" | ""
   silverCoins: 0,
   goldCoins: 0,
   silverBought: false,
@@ -101,16 +94,12 @@ function currentRoundStart(now, base, firstDurationDays, periodDays){
   const steps = Math.floor(diffDays / periodDays);
   return addDays(afterFirst, steps*periodDays);
 }
-
-// pakiety możliwe do kupienia z danej puli monet (greedy)
 function calcPossiblePacks(coins, max20Only){
   let remaining = clampInt(coins);
   let count = 0;
   for (let i=0; i<DIAMOND_COSTS.length; i++){
     const cost = DIAMOND_COSTS[i];
-    if (remaining >= cost){
-      remaining -= cost; count++;
-    } else break;
+    if (remaining >= cost){ remaining -= cost; count++; } else break;
   }
   if (!max20Only){
     const tailCost = DIAMOND_COSTS[DIAMOND_COSTS.length-1]; // 13600
@@ -121,16 +110,36 @@ function calcPossiblePacks(coins, max20Only){
   }
   return { count, remaining };
 }
+function timeLeft10h(iso){
+  const start = new Date(iso);
+  const end = new Date(start.getTime() + 10*3600*1000);
+  const ms = end - new Date();
+  if (ms<=0) return "00:00";
+  const h = Math.floor(ms/3600000);
+  const m = Math.floor((ms%3600000)/60000);
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+}
+function isTuesday0800(d){ return d.getDay()===2 && d.getHours()===8 && d.getMinutes()<10; }
+function nearestTue0800OnOrBefore(d){
+  const x = new Date(d); x.setSeconds(0,0);
+  while (true){
+    const isTue = x.getDay()===2;
+    const is0800 = (x.getHours()===8 && x.getMinutes()===0);
+    if (isTue && is0800 && x <= d) break;
+    x.setMinutes(x.getMinutes()-1);
+  }
+  return x;
+}
 
 // ===== Render =====
 function render(){
-  const body = $("#worlds-body");
+  const body = document.getElementById("worlds-body");
   body.innerHTML = "";
   state.worlds.forEach(w => body.appendChild(renderRow(w)));
   renderSummary();
 }
 function renderSummary(){
-  const el = $("#summary-packs");
+  const el = document.getElementById("summary-packs");
   let s=0,g=0;
   state.worlds.forEach(w => {
     s += calcPossiblePacks(w.silverCoins, false).count;
@@ -183,10 +192,43 @@ function renderRow(w){
     </td>
     <td><button class="del-btn" data-act="remove-world" data-id="${w.id}">Usuń</button></td>
   `;
+
+  // Wstrzyknięcie przycisków GPC Czerwony/Niebieski do kolumny po "Koniec"
+  const gpcBtnTd = document.createElement("td");
+  const btnRed = document.createElement("button");
+  btnRed.textContent = "Czerwony";
+  btnRed.className = "btn-toggle" + (w.gpcColor==="Czerwony" ? " active" : "");
+  btnRed.dataset.act = "gpc-color-red"; btnRed.dataset.id = w.id;
+
+  const btnBlue = document.createElement("button");
+  btnBlue.textContent = "Niebieski";
+  btnBlue.className = "btn-toggle" + (w.gpcColor==="Niebieski" ? " active" : "");
+  btnBlue.dataset.act = "gpc-color-blue"; btnBlue.dataset.id = w.id;
+
+  // Wstaw po 10. kolumnie (po 'Koniec')
+  const cells = tr.querySelectorAll("td");
+  tr.insertBefore(gpcBtnTd, cells[10].nextSibling);
+  gpcBtnTd.appendChild(btnRed);
+  gpcBtnTd.appendChild(btnBlue);
+
+  // Zaktualizuj headery (dodamy kolumnę w thead na tym samym miejscu)
   return tr;
 }
 
-// ===== Handlers (delegacja) =====
+// Wstaw nagłówek dla kolumny kolorów GPC (po render Table head initial creation in index.html)
+// Tu modyfikujemy thead tylko raz
+(function ensureGpcColorHeader(){
+  const thead = document.querySelector("#worlds-table thead tr");
+  if (!thead) return;
+  const ths = thead.querySelectorAll("th");
+  if (ths.length===20){ // oczekiwany stary układ
+    const th = document.createElement("th");
+    th.textContent = "GPC – Kolor";
+    thead.insertBefore(th, ths[10].nextSibling); // po 'GPC – Koniec'
+  }
+})();
+
+// ===== Handlers =====
 document.addEventListener("change", (e)=>{
   const act = e.target.dataset.act; if (!act) return;
   const id = e.target.dataset.id;
@@ -208,7 +250,7 @@ document.addEventListener("change", (e)=>{
     case "set-wg": w.wgStage = e.target.value; break;
   }
   w.updatedAt = new Date().toISOString();
-  save(); render(); // przerysuj, bo wiele pól zależy od siebie
+  save(); render();
 });
 
 document.addEventListener("input", (e)=>{
@@ -229,45 +271,34 @@ document.addEventListener("input", (e)=>{
   if (act==="set-silver-coins" || act==="set-gold-coins") renderSummary();
 });
 
-// Dodawanie / usuwanie światów
-$("#btn-add-world").addEventListener("click", ()=>{
-  const el = $("#new-world");
+// GPC kolor buttons (mutually exclusive)
+document.addEventListener("click", (e)=>{
+  const act = e.target.dataset.act;
+  if (act==="remove-world"){
+    const id = e.target.dataset.id;
+    state.worlds = state.worlds.filter(w => w.id!==id);
+    save(); render(); return;
+  }
+  if (act==="gpc-color-red" || act==="gpc-color-blue"){
+    const id = e.target.dataset.id;
+    const w = state.worlds.find(x=>x.id===id); if (!w) return;
+    w.gpcColor = (act==="gpc-color-red") ? "Czerwony" : "Niebieski";
+    w.updatedAt = new Date().toISOString();
+    save(); render(); // odśwież, by ustawić .active
+  }
+});
+
+// Dodawanie świata
+document.getElementById("btn-add-world").addEventListener("click", ()=>{
+  const el = document.getElementById("new-world");
   let name = (el.value||"").trim().toUpperCase();
   if (!/^[A-Z0-9]{1,5}$/.test(name)) return alert("Nazwa: A–Z, 0–9, max 5 znaków, bez spacji.");
   if (state.worlds.some(w => w.name === name)) return alert("Taki świat już istnieje.");
   state.worlds.push(defaultWorld(name));
   el.value=""; save(); render();
 });
-document.addEventListener("click", (e)=>{
-  if (e.target.dataset.act === "remove-world"){
-    const id = e.target.dataset.id;
-    state.worlds = state.worlds.filter(w => w.id!==id);
-    save(); render();
-  }
-});
 
-// ===== Resety i timery =====
-function timeLeft10h(iso){
-  const start = new Date(iso);
-  const end = new Date(start.getTime() + 10*3600*1000);
-  const ms = end - new Date();
-  if (ms<=0) return "00:00";
-  const h = Math.floor(ms/3600000);
-  const m = Math.floor((ms%3600000)/60000);
-  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
-}
-function isTuesday0800(d){ return d.getDay()===2 && d.getHours()===8 && d.getMinutes()<10; }
-function nearestTue0800OnOrBefore(d){
-  const x = new Date(d); x.setSeconds(0,0);
-  while (true){
-    const isTue = x.getDay()===2;
-    const is0800 = (x.getHours()===8 && x.getMinutes()===0);
-    if (isTue && is0800 && x <= d) break;
-    x.setMinutes(x.getMinutes()-1);
-  }
-  return x;
-}
-
+// Resety / timery
 function maybeResets(){
   const now = new Date();
   const today = todayStr();
@@ -280,23 +311,17 @@ function maybeResets(){
     }
   });
 
-  // Rundy: srebrne 14d, złote 84d (baza 23.10.2025 08:00, pierwsza runda 11 dni)
+  // Rundy
   const sStart = currentRoundStart(now, ROUNDS.base, ROUNDS.firstDurationDays, ROUNDS.silverPeriodDays);
   const gStart = currentRoundStart(now, ROUNDS.base, ROUNDS.firstDurationDays, ROUNDS.goldPeriodDays);
   state.worlds.forEach(w => {
     const sISO = sStart.toISOString();
     const gISO = gStart.toISOString();
-    if (w.silverRoundStart !== sISO){
-      w.silverRoundStart = sISO;
-      w.silverCoins = 0; w.silverBought=false;
-    }
-    if (w.goldRoundStart !== gISO){
-      w.goldRoundStart = gISO;
-      w.goldCoins = 0; w.goldBought=false;
-    }
+    if (w.silverRoundStart !== sISO){ w.silverRoundStart = sISO; w.silverCoins=0; w.silverBought=false; }
+    if (w.goldRoundStart !== gISO){ w.goldRoundStart = gISO; w.goldCoins=0; w.goldBought=false; }
   });
 
-  // NK 10h od zaznaczenia
+  // NK 10h
   state.worlds.forEach(w => {
     if (w.nkChecked && w.nkCheckedAt){
       const end = new Date(new Date(w.nkCheckedAt).getTime() + 10*3600*1000);
@@ -304,7 +329,7 @@ function maybeResets(){
     }
   });
 
-  // WG wt 08:00 -> etap 1 (jednorazowo w oknie)
+  // WG wt 08:00
   if (isTuesday0800(now)){
     state.worlds.forEach(w => {
       const last = w.wgLastResetAt ? new Date(w.wgLastResetAt) : null;
