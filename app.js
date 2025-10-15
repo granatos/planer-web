@@ -13,7 +13,6 @@ const EPOCHS = [
 
 // Globalne mapy (dowolna niezależnie od epoki)
 const MAPS = [
-  ...EPOCHS,
   "Brąz","Żelazo","Wcz. Śred.","Rozkwit","Jesień","Kolonialna","Przemysł","Postęp","Modernizm","Postmoderm","Wsp.","Przyszłość","Arktyka",
   "Ocean 1","Ocean 2","Ocean 3",
   "Wirtual 1","Wirtual 2","Wirtual 3",
