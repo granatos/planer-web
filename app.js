@@ -8,19 +8,20 @@ const EPOCHS = [
   "Wcz. Śred.","Rozkwit Śr.","Jesień Śr.",
   "Kolonialna","Przemysłowa","Postępowa","Modernizm",
   "Jutra","Oceaniczna","Wirtualna",
-  "Pas","Mars","Wenus","Księżyc Jowisza","Tytan"
+  "Pas","Mars","Wenus","Księżyc Jowisza","Tytan","Węzeł"
 ];
 
 // Globalne mapy (dowolna niezależnie od epoki)
 const MAPS = [
   ...EPOCHS,
+  "Brąz","Żelazo","Wcz. Śred.","Rozkwit","Jesień","Kolonialna","Przemysł","Postęp","Modernizm","Postmoderm","Wsp.","Przyszłość","Arktyka",
   "Ocean 1","Ocean 2","Ocean 3",
   "Wirtual 1","Wirtual 2","Wirtual 3",
   "Pas 1","Pas 2",
   "Mars 1","Mars 2",
   "Wenus 1","Wenus 2",
   "Jowisz 1","Jowisz 2",
-  "Tytan 1","Tytan 2"
+  "Tytan 1","Tytan 2","Węzeł 1","Węzeł 2"
 ];
 
 const EVENT_MODES = ["Łączenie kluczy","Event letni/zimowy","Patryk/Drużynowy","Zbijanie/Klocki"];
