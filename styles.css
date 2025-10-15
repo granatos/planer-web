@@ -3,21 +3,19 @@ body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;background:
 .topbar,.bottombar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#131625;border-bottom:1px solid #23283b;gap:10px;position:sticky;top:0;z-index:10}
 .bottombar{position:sticky;bottom:0;border-top:1px solid #23283b;border-bottom:0;background:#131625}
 .topbar .left,.topbar .right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pad{padding:10px 14px}
 .muted{opacity:.75}
 input,select{background:#0f1424;color:#e6e6e6;border:1px solid #2a3350;border-radius:8px;padding:6px 8px}
+input[type=number]{width:110px}
 button{background:#2663eb;color:#fff;border:0;border-radius:8px;padding:8px 10px;cursor:pointer}
 button.secondary{background:#223}
 button:disabled{opacity:.6;cursor:not-allowed}
-.card{background:#0f1424;border:1px solid #20263a;border-radius:12px;padding:12px;margin:12px}
-.card h3{margin:0 0 8px 0}
-.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:8px}
-.row{display:grid;grid-template-columns:160px 140px 1fr;gap:8px;align-items:center;margin:8px 0}
+.scroll-x{overflow:auto}
+.table{width:max(1200px,100%);border-collapse:collapse}
+.table th,.table td{border-bottom:1px solid #23283b;padding:6px 8px;text-align:left;vertical-align:middle;white-space:nowrap}
 .badge{padding:3px 8px;border:1px solid #334;border-radius:999px;font-size:12px}
 .badge.warn{border-color:#7a3;color:#fa5}
-.section-title{font-weight:700;margin:18px 0 8px 0}
-label.inline{display:inline-flex;align-items:center;gap:6px}
-hr{border:0;border-top:1px solid #23283b;margin:10px 0}
-.world-header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
-.col-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .help{font-size:12px;opacity:.8}
-.locked{opacity:.6;pointer-events:none}
+.checkbox-center{display:flex;align-items:center;justify-content:center}
+td.checkbox-center input{transform:scale(1.2)}
+.del-btn{background:#37222a}

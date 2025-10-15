@@ -1,31 +1,42 @@
-// Planer V2 – M1 (core). Brak auth w tym pliku – cloud może podmienić save().
+// Planer V2 – Tabela, zgodnie z wymaganiami
+// - Tabela: jeden wiersz = jeden świat (porównywanie jak V1)
+// - Epoka i Mapa niezależne (mapa z globalnej listy)
+// - Tłumaczenia: Zbiory, Eventy, NK -> „Zbiory/budowa”
+// - Pakiety liczone z monet wg DIAMOND_COSTS; S > 20 koszt = 13600; Z max 20
+// - Resety: dzienny (GPC Trial/Opór/Koniec), rundy (S 14d, Z 84d), NK 10h od zaznaczenia, WG wt 08:00
 
-// ===== Konfiguracja epok/map (statyczny snapshot – łatwo edytowalny) =====
+const STORAGE_KEY = "planer-v2-state";
+
+// Epoki (PL snapshot)
 const EPOCHS = [
   "Epoka Kamienia","Epoka Brązu","Epoka Żelaza",
   "Wczesne Średniowiecze","Rozkwit Średniowiecza","Jesień Średniowiecza",
   "Epoka Kolonialna","Epoka Przemysłowa","Epoka Postępowa","Modernizm",
   "Epoka Jutra","Epoka Oceaniczna","Epoka Wirtualna",
-  "Space Age Mars","Space Age Asteroid Belt","Space Age Venus","Space Age Jupiter Moon","Space Age Titan"
+  "Epoka Pasa","Epoka Marsa","Epoka Wenus","Księżyc Jowisza","Epoka Tytana"
 ];
 
-const MAPS_BY_EPOCH = {
-  "Epoka Oceaniczna": ["Ocean 1","Ocean 2","Ocean 3"],
-  "Epoka Wirtualna": ["Wirtual 1","Wirtual 2","Wirtual 3"],
-  "Space Age Mars": ["Mars 1","Mars 2"],
-  "Space Age Asteroid Belt": ["Pas 1","Pas 2"],
-  "Space Age Venus": ["Wenus 1","Wenus 2"],
-  "Space Age Jupiter Moon": ["Jowisz 1","Jowisz 2"],
-  "Space Age Titan": ["Tytan 1","Tytan 2"]
-};
-
-const DIAMOND_COSTS = [
-  4000, 4200, 4400, 4600, 4800,
-  5200, 5600, 6000, 6400, 6800,
-  7200, 7600, 8000, 8800, 9600,
-  10400, 11200, 12000, 12800, 13600
+// Globalna lista map (niezależna od epoki).
+// Zawiera nazwy epok + mapy szczegółowe z V1.
+const MAPS = [
+  // bazowe (epoki jako mapy)
+  ...EPOCHS,
+  // szczegółowe serie
+  "Ocean 1","Ocean 2","Ocean 3",
+  "Wirtual 1","Wirtual 2","Wirtual 3",
+  "Pas 1","Pas 2",
+  "Mars 1","Mars 2",
+  "Wenus 1","Wenus 2",
+  "Jowisz 1","Jowisz 2",
+  "Tytan 1","Tytan 2"
 ];
 
+const EVENT_MODES = ["Łączenie kluczy","Event letni/zimowy","Patryk/Drużynowy","Zbijanie/Klocki"];
+
+// Koszty pakietów (1..20); po 20 dla srebrnych koszt 13600, dla złotych limit 20
+const DIAMOND_COSTS = [4000,4200,4400,4600,4800,5200,5600,6000,6400,6800,7200,7600,8000,8800,9600,10400,11200,12000,12800,13600];
+
+// Rundy
 const ROUNDS = {
   base: new Date(2025, 9, 23, 8, 0, 0), // 23.10.2025 08:00
   firstDurationDays: 11,
@@ -33,43 +44,42 @@ const ROUNDS = {
   goldPeriodDays: 84
 };
 
-// ===== State =====
-const STORAGE_KEY = "planer-v2-state";
-const defaultModules = { GPC:true, NK:true, WG:true, Events:true, Collections:true };
-
-function newWorld(name){
-  return {
-    id: crypto.randomUUID(),
-    name,
-    modules: {...defaultModules},
-    epoch: EPOCHS[0],
-    map: (MAPS_BY_EPOCH[EPOCHS[0]]||[EPOCHS[0]])[0],
-    collections: { prBar:false, motif:false },
-    event: { mode:"Łączenie kluczy", taskNo:"" },
-    wg: { stage:"1", lastResetAt:null },
-    nk: { checked:false, checkedAt:null, fullBarHHmm:"" },
-    gpc: {
-      trial:"", opor:"", koniec:false,
-      silverCoins:0, goldCoins:0,
-      silverPacks:0, goldPacks:0,
-      silverBought:false, goldBought:false,
-      silverRoundStart:null, goldRoundStart:null,
-      dailyMarker: null
-    },
-    updatedAt: new Date().toISOString()
-  };
-}
+const defaultWorld = (name)=> ({
+  id: crypto.randomUUID(),
+  name,
+  epoch: EPOCHS[0],
+  map: MAPS[0],
+  prBar: false,
+  motif: false,
+  eventMode: EVENT_MODES[0],
+  taskNo: "",
+  trial: "",
+  opor: "",
+  koniec: false,
+  silverCoins: 0,
+  goldCoins: 0,
+  silverBought: false,
+  goldBought: false,
+  nkChecked: false,
+  nkCheckedAt: null,
+  nkFullBarHHmm: "",
+  wgStage: "1",
+  wgLastResetAt: null,
+  silverRoundStart: null,
+  goldRoundStart: null,
+  dailyMarker: null,
+  updatedAt: new Date().toISOString()
+});
 
 let state = load();
 if (!state.worlds?.length){
-  const baseWorlds = ["A","B","C","D","E","F","G","H","J","K","L","M"].map(newWorld);
-  state = { worlds: baseWorlds };
+  state = { worlds: ["A","B","C","D","E","F","G","H","J","K","L","M"].map(defaultWorld) };
   save();
 }
 
 // ===== Helpers =====
-const $ = sel => document.querySelector(sel);
-const $$ = sel => Array.from(document.querySelectorAll(sel));
+const $ = (s)=>document.querySelector(s);
+const $$ = (s)=>Array.from(document.querySelectorAll(s));
 function save(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch{}
   if (typeof window !== "undefined" && typeof window.onAfterLocalSave === "function"){
@@ -80,272 +90,173 @@ function load(){
   try{ const raw = localStorage.getItem(STORAGE_KEY); if (raw) return JSON.parse(raw); }catch{}
   return { worlds: [] };
 }
-function todayStr(){
-  const d = new Date();
-  return d.toISOString().slice(0,10);
-}
-function addDays(date, days){ const d=new Date(date); d.setDate(d.getDate()+days); return d; }
+function clampInt(v){ v = parseInt(v||0,10); return isFinite(v)&&v>=0 ? v : 0; }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function addDays(d,days){ const x=new Date(d); x.setDate(x.getDate()+days); return x; }
 function currentRoundStart(now, base, firstDurationDays, periodDays){
   const afterFirst = addDays(base, firstDurationDays);
   if (now < afterFirst) return base;
-  const msPerDay = 86400000;
+  const msPerDay=86400000;
   const diffDays = Math.floor((now - afterFirst)/msPerDay);
   const steps = Math.floor(diffDays / periodDays);
-  return addDays(afterFirst, steps * periodDays);
+  return addDays(afterFirst, steps*periodDays);
 }
 
-// ===== UI =====
+// pakiety możliwe do kupienia z danej puli monet (greedy)
+function calcPossiblePacks(coins, max20Only){
+  let remaining = clampInt(coins);
+  let count = 0;
+  for (let i=0; i<DIAMOND_COSTS.length; i++){
+    const cost = DIAMOND_COSTS[i];
+    if (remaining >= cost){
+      remaining -= cost; count++;
+    } else break;
+  }
+  if (!max20Only){
+    const tailCost = DIAMOND_COSTS[DIAMOND_COSTS.length-1]; // 13600
+    if (tailCost>0 && remaining >= tailCost){
+      count += Math.floor(remaining / tailCost);
+      remaining = remaining % tailCost;
+    }
+  }
+  return { count, remaining };
+}
+
+// ===== Render =====
 function render(){
-  const app = $("#app");
-  app.innerHTML = "";
-  state.worlds.forEach(w => app.appendChild(renderWorldCard(w)));
+  const body = $("#worlds-body");
+  body.innerHTML = "";
+  state.worlds.forEach(w => body.appendChild(renderRow(w)));
   renderSummary();
 }
-
 function renderSummary(){
   const el = $("#summary-packs");
   let s=0,g=0;
-  state.worlds.forEach(w => { s += +w.gpc.silverPacks||0; g += +w.gpc.goldPacks||0; });
-  el.textContent = `Pakiety (globalnie): S=${s} | Z=${g}`;
+  state.worlds.forEach(w => {
+    s += calcPossiblePacks(w.silverCoins, false).count;
+    g += calcPossiblePacks(w.goldCoins, true).count;
+  });
+  el.textContent = `Pakiety możliwe (globalnie): S=${s} | Z=${g}`;
   if (s>=20 || g>=20) el.classList.add("badge","warn"); else el.classList.remove("badge","warn");
 }
 
-function renderWorldCard(w){
-  const card = document.createElement("div");
-  card.className = "card";
-
-  const header = document.createElement("div");
-  header.className = "world-header";
-  header.innerHTML = `
-    <h3>Świat ${w.name}</h3>
-    <div>
-      ${Object.keys(defaultModules).map(m => (
-        `<label class="inline"><input data-act="toggle-module" data-mod="${m}" type="checkbox" ${w.modules[m]?'checked':''}> ${m}</label>`
-      )).join("")}
-      <button class="secondary" data-act="remove-world">Usuń</button>
-    </div>
+function renderRow(w){
+  const tr = document.createElement("tr");
+  const sPacks = calcPossiblePacks(w.silverCoins, false).count;
+  const gPacks = calcPossiblePacks(w.goldCoins, true).count;
+  const left = w.nkCheckedAt ? timeLeft10h(w.nkCheckedAt) : "";
+  tr.innerHTML = `
+    <td><strong>${w.name}</strong></td>
+    <td>
+      <select data-act="set-epoch" data-id="${w.id}">
+        ${EPOCHS.map(e=>`<option ${e===w.epoch?'selected':''}>${e}</option>`).join("")}
+      </select>
+    </td>
+    <td>
+      <select data-act="set-map" data-id="${w.id}">
+        ${MAPS.map(m=>`<option ${m===w.map?'selected':''}>${m}</option>`).join("")}
+      </select>
+    </td>
+    <td class="checkbox-center"><input type="checkbox" data-act="toggle-pr" data-id="${w.id}" ${w.prBar?'checked':''}></td>
+    <td class="checkbox-center"><input type="checkbox" data-act="toggle-motif" data-id="${w.id}" ${w.motif?'checked':''}></td>
+    <td>
+      <select data-act="set-event-mode" data-id="${w.id}">
+        ${EVENT_MODES.map(m=>`<option ${m===w.eventMode?'selected':''}>${m}</option>`).join("")}
+      </select>
+    </td>
+    <td><input data-act="set-task" data-id="${w.id}" value="${w.taskNo||''}" placeholder="nr zadania"></td>
+    <td><input data-act="set-trial" data-id="${w.id}" value="${w.trial||''}" ${w.koniec?'disabled':''}></td>
+    <td><input data-act="set-opor" data-id="${w.id}" value="${w.opor||''}" ${w.koniec?'disabled':''}></td>
+    <td class="checkbox-center"><input type="checkbox" data-act="toggle-koniec" data-id="${w.id}" ${w.koniec?'checked':''}></td>
+    <td><input type="number" min="0" data-act="set-silver-coins" data-id="${w.id}" value="${w.silverCoins||0}" ${w.silverBought?'disabled':''}></td>
+    <td>${sPacks}</td>
+    <td class="checkbox-center"><input type="checkbox" data-act="toggle-silver-bought" data-id="${w.id}" ${w.silverBought?'checked':''}></td>
+    <td><input type="number" min="0" data-act="set-gold-coins" data-id="${w.id}" value="${w.goldCoins||0}" ${w.goldBought?'disabled':''}></td>
+    <td>${gPacks}</td>
+    <td class="checkbox-center"><input type="checkbox" data-act="toggle-gold-bought" data-id="${w.id}" ${w.goldBought?'checked':''}></td>
+    <td class="checkbox-center"><input type="checkbox" data-act="nk-toggle" data-id="${w.id}" ${w.nkChecked?'checked':''} title="${left?`Pozostało: ${left}`:''}"></td>
+    <td><input data-act="nk-fullbar" data-id="${w.id}" placeholder="HH:mm" value="${w.nkFullBarHHmm||''}"></td>
+    <td>
+      <select data-act="set-wg" data-id="${w.id}">
+        ${["1","2","3","4","5","Koniec"].map(s=>`<option ${s===w.wgStage?'selected':''}>${s}</option>`).join("")}
+      </select>
+    </td>
+    <td><button class="del-btn" data-act="remove-world" data-id="${w.id}">Usuń</button></td>
   `;
-  card.appendChild(header);
-
-  // Epoka / Mapa
-  const maps = (MAPS_BY_EPOCH[w.epoch] || [w.epoch]);
-  if (!maps.includes(w.map)) w.map = maps[0];
-  const row1 = document.createElement("div");
-  row1.className = "row";
-  row1.innerHTML = `
-    <div>Epoka</div>
-    <div><select data-act="set-epoch">${EPOCHS.map(e=>`<option ${e===w.epoch?'selected':''}>${e}</option>`).join("")}</select></div>
-    <div><select data-act="set-map">${maps.map(m=>`<option ${m===w.map?'selected':''}>${m}</option>`).join("")}</select></div>
-  `;
-  card.appendChild(row1);
-
-  if (w.modules.Collections){
-    const sec = document.createElement("div");
-    sec.className = "row";
-    sec.innerHTML = `
-      <div class="section-title">Zbiory</div>
-      <label class="inline"><input data-act="toggle-pr" type="checkbox" ${w.collections.prBar?'checked':''}> Pasek PR</label>
-      <label class="inline"><input data-act="toggle-motif" type="checkbox" ${w.collections.motif?'checked':''}> Motywka</label>
-    `;
-    card.appendChild(sec);
-  }
-
-  if (w.modules.Events){
-    const sec = document.createElement("div");
-    sec.className = "row";
-    sec.innerHTML = `
-      <div class="section-title">Eventy</div>
-      <div>
-        <select data-act="set-event-mode">
-          ${["Łączenie kluczy","Event letni/zimowy","Patryk/Drużynowy","Zbijanie/Klocki"].map(m=>`<option ${m===w.event.mode?'selected':''}>${m}</option>`).join("")}
-        </select>
-      </div>
-      <div><input data-act="set-event-task" placeholder="nr zadania" value="${w.event.taskNo||''}"></div>
-    `;
-    card.appendChild(sec);
-  }
-
-  if (w.modules.GPC){
-    const sec = document.createElement("div");
-    sec.className = "card";
-    sec.innerHTML = `
-      <div class="section-title">GPC</div>
-      <div class="col-3">
-        <label>Trial<br><input data-act="gpc-trial" ${w.gpc.koniec?'disabled':''} value="${w.gpc.trial||''}"></label>
-        <label>Opór<br><input data-act="gpc-opor" ${w.gpc.koniec?'disabled':''} value="${w.gpc.opor||''}"></label>
-        <label class="inline" style="margin-top:20px"><input type="checkbox" data-act="gpc-koniec" ${w.gpc.koniec?'checked':''}> Koniec (blokuje Trial/Opór)</label>
-      </div>
-      <hr>
-      <div class="col-3">
-        <label>Srebrne monety<br><input type="number" min="0" data-act="gpc-silver-coins" ${w.gpc.silverBought?'disabled':''} value="${w.gpc.silverCoins||0}"></label>
-        <label>Pakiety S<br><input type="number" min="0" data-act="gpc-silver-packs" ${w.gpc.silverBought?'disabled':''} value="${w.gpc.silverPacks||0}"></label>
-        <label class="inline" style="margin-top:20px"><input type="checkbox" data-act="gpc-silver-bought" ${w.gpc.silverBought?'checked':''}> Wykupione?</label>
-      </div>
-      <div class="col-3" style="margin-top:8px">
-        <label>Złote monety<br><input type="number" min="0" data-act="gpc-gold-coins" ${w.gpc.goldBought?'disabled':''} value="${w.gpc.goldCoins||0}"></label>
-        <label>Pakiety Z<br><input type="number" min="0" data-act="gpc-gold-packs" ${w.gpc.goldBought?'disabled':''} value="${w.gpc.goldPacks||0}"></label>
-        <label class="inline" style="margin-top:20px"><input type="checkbox" data-act="gpc-gold-bought" ${w.gpc.goldBought?'checked':''}> Wykupione?</label>
-      </div>
-      <div class="help">Pakiety liczone jak w V1 (tu możesz wstawić swój przelicznik). Próg ≥20 ⇒ podświetlenie w topbarze.</div>
-    `;
-    card.appendChild(sec);
-  }
-
-  if (w.modules.NK){
-    const sec = document.createElement("div");
-    sec.className = "row";
-    const left = w.nk.checkedAt ? timeLeft10h(w.nk.checkedAt) : "";
-    sec.innerHTML = `
-      <div class="section-title">NK</div>
-      <label class="inline"><input type="checkbox" data-act="nk-toggle" ${w.nk.checked?'checked':''}> NK</label>
-      <input data-act="nk-fullbar" placeholder="Pełny Pasek (HH:mm)" value="${w.nk.fullBarHHmm||''}">
-      <span class="help">${left ? `Pozostało: ${left}` : ''}</span>
-    `;
-    card.appendChild(sec);
-  }
-
-  if (w.modules.WG){
-    const sec = document.createElement("div");
-    sec.className = "row";
-    sec.innerHTML = `
-      <div class="section-title">WG</div>
-      <div>
-        <select data-act="wg-stage">
-          ${["1","2","3","4","5","Koniec"].map(s=>`<option ${s===w.wg.stage?'selected':''}>${s}</option>`).join("")}
-        </select>
-      </div>
-      <div class="help">Reset: wtorki 08:00 ⇒ Etap 1</div>
-    `;
-    card.appendChild(sec);
-  }
-
-  card.addEventListener("change", (e)=>handleChange(e,w));
-  card.addEventListener("input", (e)=>handleInput(e,w));
-  header.addEventListener("click",(e)=>{ if (e.target.dataset.act==="remove-world") removeWorld(w.id); });
-
-  return card;
+  return tr;
 }
 
-// Handlers
-function handleChange(e,w){
-  const act = e.target.dataset.act;
+// ===== Handlers (delegacja) =====
+document.addEventListener("change", (e)=>{
+  const act = e.target.dataset.act; if (!act) return;
+  const id = e.target.dataset.id;
+  const w = state.worlds.find(x => x.id===id); if (!w) return;
+
   switch(act){
-    case "toggle-module": w.modules[e.target.dataset.mod] = e.target.checked; break;
-    case "set-epoch": w.epoch = e.target.value; w.map = (MAPS_BY_EPOCH[w.epoch]||[w.epoch])[0]; break;
+    case "set-epoch": w.epoch = e.target.value; break;
     case "set-map": w.map = e.target.value; break;
-    case "gpc-koniec": w.gpc.koniec = e.target.checked; break;
-    case "gpc-silver-bought": w.gpc.silverBought = e.target.checked; break;
-    case "gpc-gold-bought": w.gpc.goldBought = e.target.checked; break;
-    case "nk-toggle": w.nk.checked = e.target.checked; w.nk.checkedAt = w.nk.checked ? new Date().toISOString() : null; break;
-    case "wg-stage": w.wg.stage = e.target.value; break;
-    case "set-event-mode": w.event.mode = e.target.value; break;
+    case "toggle-pr": w.prBar = e.target.checked; break;
+    case "toggle-motif": w.motif = e.target.checked; break;
+    case "set-event-mode": w.eventMode = e.target.value; break;
+    case "toggle-koniec": w.koniec = e.target.checked; break;
+    case "toggle-silver-bought": w.silverBought = e.target.checked; break;
+    case "toggle-gold-bought": w.goldBought = e.target.checked; break;
+    case "nk-toggle":
+      w.nkChecked = e.target.checked;
+      w.nkCheckedAt = w.nkChecked ? new Date().toISOString() : null;
+      break;
+    case "set-wg": w.wgStage = e.target.value; break;
   }
   w.updatedAt = new Date().toISOString();
-  save(); render();
-}
-function handleInput(e,w){
-  const act = e.target.dataset.act;
-  switch(act){
-    case "toggle-pr": w.collections.prBar = e.target.checked; break;
-    case "toggle-motif": w.collections.motif = e.target.checked; break;
-    case "set-event-task": w.event.taskNo = e.target.value; break;
-    case "gpc-trial": if (!w.gpc.koniec) w.gpc.trial = e.target.value; break;
-    case "gpc-opor": if (!w.gpc.koniec) w.gpc.opor = e.target.value; break;
-    case "gpc-silver-coins": if (!w.gpc.silverBought) w.gpc.silverCoins = clampInt(e.target.value); break;
-    case "gpc-gold-coins": if (!w.gpc.goldBought) w.gpc.goldCoins = clampInt(e.target.value); break;
-    case "gpc-silver-packs": if (!w.gpc.silverBought) w.gpc.silverPacks = clampInt(e.target.value); break; // podmień algorytm jeśli trzeba
-    case "gpc-gold-packs": if (!w.gpc.goldBought) w.gpc.goldPacks = clampInt(e.target.value); break;
-    case "nk-fullbar": w.nk.fullBarHHmm = e.target.value; break;
-  }
-  w.updatedAt = new Date().toISOString();
-  save(); renderSummary();
-}
-function clampInt(v){ v = parseInt(v||0,10); return isFinite(v)&&v>=0 ? v : 0; }
-function removeWorld(id){ state.worlds = state.worlds.filter(w => w.id !== id); save(); render(); }
+  save(); render(); // przerysuj, bo wiele pól zależy od siebie
+});
 
-// Topbar buttons
-document.getElementById("btn-add-world").addEventListener("click", () => {
-  const el = document.getElementById("new-world");
+document.addEventListener("input", (e)=>{
+  const act = e.target.dataset.act; if (!act) return;
+  const id = e.target.dataset.id;
+  const w = state.worlds.find(x => x.id===id); if (!w) return;
+
+  switch(act){
+    case "set-task": w.taskNo = e.target.value; break;
+    case "set-trial": if (!w.koniec) w.trial = e.target.value; break;
+    case "set-opor": if (!w.koniec) w.opor = e.target.value; break;
+    case "set-silver-coins": if (!w.silverBought) w.silverCoins = clampInt(e.target.value); break;
+    case "set-gold-coins": if (!w.goldBought) w.goldCoins = clampInt(e.target.value); break;
+    case "nk-fullbar": w.nkFullBarHHmm = e.target.value; break;
+  }
+  w.updatedAt = new Date().toISOString();
+  save();
+  if (act==="set-silver-coins" || act==="set-gold-coins") renderSummary();
+});
+
+// Dodawanie / usuwanie światów
+$("#btn-add-world").addEventListener("click", ()=>{
+  const el = $("#new-world");
   let name = (el.value||"").trim().toUpperCase();
   if (!/^[A-Z0-9]{1,5}$/.test(name)) return alert("Nazwa: A–Z, 0–9, max 5 znaków, bez spacji.");
   if (state.worlds.some(w => w.name === name)) return alert("Taki świat już istnieje.");
-  state.worlds.push(newWorld(name)); el.value=""; save(); render();
+  state.worlds.push(defaultWorld(name));
+  el.value=""; save(); render();
 });
-document.getElementById("btn-export").addEventListener("click", () => {
-  const rows=[];
-  state.worlds.forEach(w => rows.push({
-    world:w.name, epoch:w.epoch, map:w.map,
-    prBar:w.collections.prBar, motif:w.collections.motif,
-    eventMode:w.event.mode, taskNo:w.event.taskNo,
-    wgStage:w.wg.stage, nkChecked:w.nk.checked, nkFullBar:w.nk.fullBarHHmm,
-    trial:w.gpc.trial, opor:w.gpc.opor, koniec:w.gpc.koniec,
-    silverCoins:w.gpc.silverCoins, silverPacks:w.gpc.silverPacks, silverBought:w.gpc.silverBought,
-    goldCoins:w.gpc.goldCoins, goldPacks:w.gpc.goldPacks, goldBought:w.gpc.goldBought
-  }));
-  const headers = Object.keys(rows[0]||{world:""});
-  const csv = [headers.join(",")].concat(rows.map(r => headers.map(h => JSON.stringify(r[h]??"")).join(","))).join("\n");
-  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "planer_v2.csv"; document.body.appendChild(a); a.click(); a.remove();
+document.addEventListener("click", (e)=>{
+  if (e.target.dataset.act === "remove-world"){
+    const id = e.target.dataset.id;
+    state.worlds = state.worlds.filter(w => w.id!==id);
+    save(); render();
+  }
 });
 
-// Timers / resets
-function timeLeft10h(checkedAtISO){
-  const start = new Date(checkedAtISO);
+// ===== Resety i timery =====
+function timeLeft10h(iso){
+  const start = new Date(iso);
   const end = new Date(start.getTime() + 10*3600*1000);
   const ms = end - new Date();
-  if (ms <= 0) return "00:00";
+  if (ms<=0) return "00:00";
   const h = Math.floor(ms/3600000);
   const m = Math.floor((ms%3600000)/60000);
   return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
 }
-function maybeResets(){
-  const now = new Date();
-  const today = todayStr();
-
-  // GPC daily
-  state.worlds.forEach(w => {
-    if (w.gpc.dailyMarker !== today){
-      w.gpc.trial = ""; w.gpc.opor = ""; w.gpc.koniec = false;
-      w.gpc.dailyMarker = today;
-    }
-  });
-
-  // Rounds
-  const sStart = currentRoundStart(now, ROUNDS.base, ROUNDS.firstDurationDays, ROUNDS.silverPeriodDays);
-  const gStart = currentRoundStart(now, ROUNDS.base, ROUNDS.firstDurationDays, ROUNDS.goldPeriodDays);
-  state.worlds.forEach(w => {
-    const sISO = sStart.toISOString(); const gISO = gStart.toISOString();
-    if (w.gpc.silverRoundStart !== sISO){
-      w.gpc.silverRoundStart = sISO; w.gpc.silverCoins=0; w.gpc.silverPacks=0; w.gpc.silverBought=false;
-    }
-    if (w.gpc.goldRoundStart !== gISO){
-      w.gpc.goldRoundStart = gISO; w.gpc.goldCoins=0; w.gpc.goldPacks=0; w.gpc.goldBought=false;
-    }
-  });
-
-  // NK 10h from checked
-  state.worlds.forEach(w => {
-    if (w.nk.checked && w.nk.checkedAt){
-      const end = new Date(new Date(w.nk.checkedAt).getTime() + 10*3600*1000);
-      if (now >= end){ w.nk.checked=false; w.nk.checkedAt=null; }
-    }
-  });
-
-  // WG Tuesday 08:00
-  if (isTuesday0800(now)){
-    state.worlds.forEach(w => {
-      const last = w.wg.lastResetAt ? new Date(w.wg.lastResetAt) : null;
-      if (!last || last < nearestTue0800OnOrBefore(now)){
-        w.wg.stage = "1"; w.wg.lastResetAt = now.toISOString();
-      }
-    });
-  }
-
-  save(); render();
-}
-function isTuesday0800(d){
-  return d.getDay()===2 && d.getHours()===8 && d.getMinutes()<10;
-}
+function isTuesday0800(d){ return d.getDay()===2 && d.getHours()===8 && d.getMinutes()<10; }
 function nearestTue0800OnOrBefore(d){
   const x = new Date(d); x.setSeconds(0,0);
   while (true){
@@ -356,6 +267,56 @@ function nearestTue0800OnOrBefore(d){
   }
   return x;
 }
+
+function maybeResets(){
+  const now = new Date();
+  const today = todayStr();
+
+  // GPC dzienny reset 00:00
+  state.worlds.forEach(w => {
+    if (w.dailyMarker !== today){
+      w.trial = ""; w.opor = ""; w.koniec = false;
+      w.dailyMarker = today;
+    }
+  });
+
+  // Rundy: srebrne 14d, złote 84d (baza 23.10.2025 08:00, pierwsza runda 11 dni)
+  const sStart = currentRoundStart(now, ROUNDS.base, ROUNDS.firstDurationDays, ROUNDS.silverPeriodDays);
+  const gStart = currentRoundStart(now, ROUNDS.base, ROUNDS.firstDurationDays, ROUNDS.goldPeriodDays);
+  state.worlds.forEach(w => {
+    const sISO = sStart.toISOString();
+    const gISO = gStart.toISOString();
+    if (w.silverRoundStart !== sISO){
+      w.silverRoundStart = sISO;
+      w.silverCoins = 0; w.silverBought=false;
+    }
+    if (w.goldRoundStart !== gISO){
+      w.goldRoundStart = gISO;
+      w.goldCoins = 0; w.goldBought=false;
+    }
+  });
+
+  // NK 10h od zaznaczenia
+  state.worlds.forEach(w => {
+    if (w.nkChecked && w.nkCheckedAt){
+      const end = new Date(new Date(w.nkCheckedAt).getTime() + 10*3600*1000);
+      if (now >= end){ w.nkChecked=false; w.nkCheckedAt=null; }
+    }
+  });
+
+  // WG wt 08:00 -> etap 1 (jednorazowo w oknie)
+  if (isTuesday0800(now)){
+    state.worlds.forEach(w => {
+      const last = w.wgLastResetAt ? new Date(w.wgLastResetAt) : null;
+      if (!last || last < nearestTue0800OnOrBefore(now)){
+        w.wgStage = "1"; w.wgLastResetAt = now.toISOString();
+      }
+    });
+  }
+
+  save(); render();
+}
+
 setInterval(maybeResets, 60*1000);
 maybeResets();
 render();
