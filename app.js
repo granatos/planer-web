@@ -1,8 +1,8 @@
-// Planer V2 – Tabela (fixed widths), uproszczone nazwy epok, GPC Czerwony/Niebieski
+// Planer V2 – tabela (kolumny zsynchronizowane, 21 kolumn), emoji 🔴/🔵 dla GPC
 
 const STORAGE_KEY = "planer-v2-state";
 
-// Epoki – skrócone polskie etykiety
+// Epoki – skrócone PL
 const EPOCHS = [
   "Kamień","Brąz","Żelazo",
   "Wcz. Śred.","Rozkwit Śr.","Jesień Śr.",
@@ -11,7 +11,7 @@ const EPOCHS = [
   "Pas","Mars","Wenus","Księżyc Jowisza","Tytan"
 ];
 
-// Globalne mapy – można wybrać dowolną niezależnie od epoki
+// Globalne mapy (dowolna niezależnie od epoki)
 const MAPS = [
   ...EPOCHS,
   "Ocean 1","Ocean 2","Ocean 3",
@@ -25,12 +25,10 @@ const MAPS = [
 
 const EVENT_MODES = ["Łączenie kluczy","Event letni/zimowy","Patryk/Drużynowy","Zbijanie/Klocki"];
 
-// Koszty pakietów 1..20; po 20 (tylko srebrne) koszt 13600; złote max 20
 const DIAMOND_COSTS = [4000,4200,4400,4600,4800,5200,5600,6000,6400,6800,7200,7600,8000,8800,9600,10400,11200,12000,12800,13600];
 
-// Rundy
 const ROUNDS = {
-  base: new Date(2025, 9, 23, 8, 0, 0), // 23.10.2025 08:00
+  base: new Date(2025, 9, 23, 8, 0, 0),
   firstDurationDays: 11,
   silverPeriodDays: 14,
   goldPeriodDays: 84
@@ -72,7 +70,6 @@ if (!state.worlds?.length){
 
 // ===== Helpers =====
 const $ = (s)=>document.querySelector(s);
-const $$ = (s)=>Array.from(document.querySelectorAll(s));
 function save(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch{}
   if (typeof window !== "undefined" && typeof window.onAfterLocalSave === "function"){
@@ -102,7 +99,7 @@ function calcPossiblePacks(coins, max20Only){
     if (remaining >= cost){ remaining -= cost; count++; } else break;
   }
   if (!max20Only){
-    const tailCost = DIAMOND_COSTS[DIAMOND_COSTS.length-1]; // 13600
+    const tailCost = DIAMOND_COSTS[DIAMOND_COSTS.length-1];
     if (tailCost>0 && remaining >= tailCost){
       count += Math.floor(remaining / tailCost);
       remaining = remaining % tailCost;
@@ -154,6 +151,7 @@ function renderRow(w){
   const sPacks = calcPossiblePacks(w.silverCoins, false).count;
   const gPacks = calcPossiblePacks(w.goldCoins, true).count;
   const left = w.nkCheckedAt ? timeLeft10h(w.nkCheckedAt) : "";
+
   tr.innerHTML = `
     <td><strong>${w.name}</strong></td>
     <td>
@@ -177,6 +175,10 @@ function renderRow(w){
     <td><input data-act="set-trial" data-id="${w.id}" value="${w.trial||''}" ${w.koniec?'disabled':''}></td>
     <td><input data-act="set-opor" data-id="${w.id}" value="${w.opor||''}" ${w.koniec?'disabled':''}></td>
     <td class="checkbox-center"><input type="checkbox" data-act="toggle-koniec" data-id="${w.id}" ${w.koniec?'checked':''}></td>
+    <td class="checkbox-center">
+      <button class="btn-toggle ${w.gpcColor==='Czerwony'?'active':''}" data-act="gpc-color-red" data-id="${w.id}" aria-label="GPC Czerwony">🔴</button>
+      <button class="btn-toggle ${w.gpcColor==='Niebieski'?'active':''}" data-act="gpc-color-blue" data-id="${w.id}" aria-label="GPC Niebieski">🔵</button>
+    </td>
     <td><input type="number" min="0" data-act="set-silver-coins" data-id="${w.id}" value="${w.silverCoins||0}" ${w.silverBought?'disabled':''}></td>
     <td>${sPacks}</td>
     <td class="checkbox-center"><input type="checkbox" data-act="toggle-silver-bought" data-id="${w.id}" ${w.silverBought?'checked':''}></td>
@@ -193,42 +195,10 @@ function renderRow(w){
     <td><button class="del-btn" data-act="remove-world" data-id="${w.id}">Usuń</button></td>
   `;
 
-  // Wstrzyknięcie przycisków GPC Czerwony/Niebieski do kolumny po "Koniec"
-  const gpcBtnTd = document.createElement("td");
-  const btnRed = document.createElement("button");
-  btnRed.textContent = "Czerwony";
-  btnRed.className = "btn-toggle" + (w.gpcColor==="Czerwony" ? " active" : "");
-  btnRed.dataset.act = "gpc-color-red"; btnRed.dataset.id = w.id;
-
-  const btnBlue = document.createElement("button");
-  btnBlue.textContent = "Niebieski";
-  btnBlue.className = "btn-toggle" + (w.gpcColor==="Niebieski" ? " active" : "");
-  btnBlue.dataset.act = "gpc-color-blue"; btnBlue.dataset.id = w.id;
-
-  // Wstaw po 10. kolumnie (po 'Koniec')
-  const cells = tr.querySelectorAll("td");
-  tr.insertBefore(gpcBtnTd, cells[10].nextSibling);
-  gpcBtnTd.appendChild(btnRed);
-  gpcBtnTd.appendChild(btnBlue);
-
-  // Zaktualizuj headery (dodamy kolumnę w thead na tym samym miejscu)
   return tr;
 }
 
-// Wstaw nagłówek dla kolumny kolorów GPC (po render Table head initial creation in index.html)
-// Tu modyfikujemy thead tylko raz
-(function ensureGpcColorHeader(){
-  const thead = document.querySelector("#worlds-table thead tr");
-  if (!thead) return;
-  const ths = thead.querySelectorAll("th");
-  if (ths.length===20){ // oczekiwany stary układ
-    const th = document.createElement("th");
-    th.textContent = "GPC – Kolor";
-    thead.insertBefore(th, ths[10].nextSibling); // po 'GPC – Koniec'
-  }
-})();
-
-// ===== Handlers =====
+// ===== Delegated handlers =====
 document.addEventListener("change", (e)=>{
   const act = e.target.dataset.act; if (!act) return;
   const id = e.target.dataset.id;
@@ -271,9 +241,8 @@ document.addEventListener("input", (e)=>{
   if (act==="set-silver-coins" || act==="set-gold-coins") renderSummary();
 });
 
-// GPC kolor buttons (mutually exclusive)
 document.addEventListener("click", (e)=>{
-  const act = e.target.dataset.act;
+  const act = e.target.dataset.act; if (!act) return;
   if (act==="remove-world"){
     const id = e.target.dataset.id;
     state.worlds = state.worlds.filter(w => w.id!==id);
@@ -284,7 +253,7 @@ document.addEventListener("click", (e)=>{
     const w = state.worlds.find(x=>x.id===id); if (!w) return;
     w.gpcColor = (act==="gpc-color-red") ? "Czerwony" : "Niebieski";
     w.updatedAt = new Date().toISOString();
-    save(); render(); // odśwież, by ustawić .active
+    save(); render();
   }
 });
 
@@ -298,12 +267,12 @@ document.getElementById("btn-add-world").addEventListener("click", ()=>{
   el.value=""; save(); render();
 });
 
-// Resety / timery
+// ===== Resety / timery =====
 function maybeResets(){
   const now = new Date();
   const today = todayStr();
 
-  // GPC dzienny reset 00:00
+  // GPC dzienny
   state.worlds.forEach(w => {
     if (w.dailyMarker !== today){
       w.trial = ""; w.opor = ""; w.koniec = false;
@@ -321,7 +290,7 @@ function maybeResets(){
     if (w.goldRoundStart !== gISO){ w.goldRoundStart = gISO; w.goldCoins=0; w.goldBought=false; }
   });
 
-  // NK 10h
+  // NK 10h od zaznaczenia
   state.worlds.forEach(w => {
     if (w.nkChecked && w.nkCheckedAt){
       const end = new Date(new Date(w.nkCheckedAt).getTime() + 10*3600*1000);
