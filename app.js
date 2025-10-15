@@ -1,12 +1,32 @@
-// app.js — przywrócona logika planera + normalizacja
-// Współpracuje z auth-cloud.js (compat). Nic o auth tutaj.
+// app.js — CORE v2 (clean interior) — works with auth-cloud.js + auth-ui.js
+// No auth here. This file owns UI logic and local state. Cloud layer wraps window.save().
 
-// --- Normalizacja stanu ---
-window.normalizeState = function (s) {
-  if (!s || typeof s !== 'object') s = {};
-  if (!Array.isArray(s.rows)) s.rows = [];
-  // Pola domyślne dla wierszy
-  s.rows = s.rows.map(r => ({
+// ===== Utilities =====
+const $ = (id) => document.getElementById(id);
+const bySel = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+const toInt = (v) => {
+  if (v === null || v === undefined) return 0;
+  const s = String(v).replace(',', '.').trim();
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+};
+const uid = () => (crypto?.randomUUID?.() || (`w_${Math.random().toString(36).slice(2)}_${Date.now()}`));
+
+// ===== Event bus (tiny) =====
+const bus = (()=>{
+  const map = new Map();
+  return {
+    on(ev, fn){ if(!map.has(ev)) map.set(ev, []); map.get(ev).push(fn); },
+    emit(ev, payload){ (map.get(ev)||[]).forEach(fn => { try{ fn(payload); }catch(e){ console.error(e);} }); }
+  };
+})();
+
+// ===== State schema & normalization =====
+window.STORAGE_KEY = 'planer-web-state';
+
+function normalizeRow(r){
+  return {
+    id: r?.id || uid(),
     visible: r?.visible !== false,
     world: r?.world ?? '',
     daily: r?.daily ?? '',
@@ -26,109 +46,173 @@ window.normalizeState = function (s) {
     pr: r?.pr ?? '',
     map: r?.map ?? '',
     era: r?.era ?? ''
-  }));
+  };
+}
+
+window.normalizeState = function(s){
+  if (!s || typeof s !== 'object') s = {};
+  if (!Array.isArray(s.rows)) s.rows = [];
+  s.rows = s.rows.map(normalizeRow);
+  // Column group visibility flags (default: all on)
+  const dfltCols = { Event:true, GPC:true, NK:true, WG:true, Zbiory:true, Dane:true };
+  s.columns = Object.assign(dfltCols, s.columns || {});
   return s;
 };
 
-window.STORAGE_KEY = 'planer-web-state';
-
-// Startowy stan
+// ===== Initial state =====
 window.state = window.normalizeState(window.state || {
-  rows: []
+  rows: [ normalizeRow({ world: 'Świat-1', visible:true }) ],
+  columns: { Event:true, GPC:true, NK:true, WG:true, Zbiory:true, Dane:true }
 });
 
-// --- Helpers ---
-const $ = (id) => document.getElementById(id);
-function toNumber(v){ const n = parseInt(String(v).replace(',', '.')); return Number.isFinite(n) ? n : 0; }
+// ===== Rendering =====
+function renderGroups(){
+  // Respect group toggles by applying CSS classes to root
+  const root = document.documentElement;
+  const grp = window.state.columns;
+  const classes = {
+    Event: 'colgrp-event', GPC:'colgrp-gpc', NK:'colgrp-nk',
+    WG:'colgrp-wg', Zbiory:'colgrp-zbiory', Dane:'colgrp-dane'
+  };
+  for (const [key, cls] of Object.entries(classes)){
+    if (grp[key]) root.classList.remove(`hide-${cls}`);
+    else root.classList.add(`hide-${cls}`);
+  }
+}
 
-// --- Render UI ---
-window.renderAll = function(){
-  const root = $('rows'); if (!root) return;
-  const rows = window.state?.rows || [];
+function renderHeaderToggles(){
+  const ids = ['grp-Event','grp-GPC','grp-NK','grp-WG','grp-Zbiory','grp-Dane'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const key = id.split('-')[1];
+    el.checked = !!window.state.columns[key];
+  });
+}
+
+function rebuildHiddenSelect(){
+  const sel = document.getElementById('hidden-select'); if (!sel) return;
+  const hidden = window.state.rows.filter(r => !r.visible).map(r => ({id:r.id, label:r.world || `Wiersz ${r.id.slice(-4)}`}));
+  sel.innerHTML = hidden.map(h => `<option value="${h.id}">${h.label}</option>`).join('');
+}
+
+function renderRows(){
+  const root = document.getElementById('rows'); if (!root) return;
   root.innerHTML = '';
+  const rows = window.state.rows;
 
-  rows.forEach((r, i) => {
+  rows.forEach((r) => {
     const sec = document.createElement('section');
     sec.className = 'grid row';
     if (!r.visible) sec.style.display = 'none';
+    sec.dataset.id = r.id;
+
     sec.innerHTML = `
-      <div><input type="checkbox" ${r.visible?'checked':''} data-k="visible" data-i="${i}"></div>
-      <div><input type="text" value="${r.world||''}" data-k="world" data-i="${i}" placeholder="Świat"></div>
-      <div><input type="text" value="${r.daily||''}" data-k="daily" data-i="${i}"></div>
-      <div><input type="text" value="${r.rival||''}" data-k="rival" data-i="${i}"></div>
-      <div><input type="text" value="${r.plans3||''}" data-k="plans3" data-i="${i}"></div>
-      <div><input type="text" value="${r.taskNo||''}" data-k="taskNo" data-i="${i}"></div>
-      <div><input type="text" value="${r.trial||''}" data-k="trial" data-i="${i}"></div>
-      <div><input type="text" value="${r.resistance||''}" data-k="resistance" data-i="${i}"></div>
-      <div><input type="text" value="${r.end||''}" data-k="end" data-i="${i}"></div>
-      <div><input type="text" value="${r.silver||''}" data-k="silver" data-i="${i}"></div>
-      <div><input type="text" value="${r.silverPacks||''}" data-k="silverPacks" data-i="${i}" placeholder="0"></div>
-      <div><input type="text" value="${r.gold||''}" data-k="gold" data-i="${i}"></div>
-      <div><input type="text" value="${r.goldPacks||''}" data-k="goldPacks" data-i="${i}" placeholder="0"></div>
-      <div><input type="text" value="${r.nk||''}" data-k="nk" data-i="${i}"></div>
-      <div><input type="text" value="${r.wg||''}" data-k="wg" data-i="${i}"></div>
-      <div><input type="text" value="${r.motif||''}" data-k="motif" data-i="${i}"></div>
-      <div><input type="text" value="${r.pr||''}" data-k="pr" data-i="${i}"></div>
-      <div><input type="text" value="${r.map||''}" data-k="map" data-i="${i}"></div>
-      <div><input type="text" value="${r.era||''}" data-k="era" data-i="${i}"></div>
+      <div><input type="checkbox" ${r.visible?'checked':''} data-k="visible"></div>
+      <div><input type="text" value="${r.world||''}" data-k="world" placeholder="Świat"></div>
+
+      <div class="col-Event"><input type="text" value="${r.daily||''}" data-k="daily"></div>
+      <div class="col-Event"><input type="text" value="${r.rival||''}" data-k="rival"></div>
+      <div class="col-Event"><input type="text" value="${r.plans3||''}" data-k="plans3"></div>
+      <div class="col-Event"><input type="text" value="${r.taskNo||''}" data-k="taskNo"></div>
+
+      <div class="col-GPC"><input type="text" value="${r.trial||''}" data-k="trial"></div>
+      <div class="col-GPC"><input type="text" value="${r.resistance||''}" data-k="resistance"></div>
+      <div class="col-GPC"><input type="text" value="${r.end||''}" data-k="end"></div>
+
+      <div class="col-Zbiory"><input type="text" value="${r.silver||''}" data-k="silver"></div>
+      <div class="col-Zbiory"><input type="text" value="${r.silverPacks||''}" data-k="silverPacks" placeholder="0"></div>
+      <div class="col-Zbiory"><input type="text" value="${r.gold||''}" data-k="gold"></div>
+      <div class="col-Zbiory"><input type="text" value="${r.goldPacks||''}" data-k="goldPacks" placeholder="0"></div>
+
+      <div class="col-NK"><input type="text" value="${r.nk||''}" data-k="nk"></div>
+      <div class="col-WG"><input type="text" value="${r.wg||''}" data-k="wg"></div>
+
+      <div class="col-Dane"><input type="text" value="${r.motif||''}" data-k="motif"></div>
+      <div class="col-Dane"><input type="text" value="${r.pr||''}" data-k="pr"></div>
+      <div class="col-Dane"><input type="text" value="${r.map||''}" data-k="map"></div>
+      <div class="col-Dane"><input type="text" value="${r.era||''}" data-k="era"></div>
     `;
     root.appendChild(sec);
   });
+}
 
-  // Hidden select rebuild
-  const sel = $('hidden-select');
-  if (sel){
-    const hidden = rows.map((r, i)=>({label: r.world||(`Wiersz ${i+1}`), idx:i})).filter(x => window.state.rows[x.idx].visible === false);
-    sel.innerHTML = hidden.map(h => `<option value="${h.idx}">${h.label}</option>`).join('');
-  }
-
-  // Totals badge
-  updateTotalsBadge();
-};
-
-function updateTotalsBadge(){
-  let silverSum=0, goldSum=0;
+function updateTotals(){
+  let s=0,g=0;
   for (const r of window.state.rows){
     if (!r.visible) continue;
-    silverSum += toNumber(r.silverPacks);
-    goldSum   += toNumber(r.goldPacks);
+    s += toInt(r.silverPacks);
+    g += toInt(r.goldPacks);
   }
   let badge = document.getElementById('totals-badge');
   if (!badge){
     badge = document.createElement('span');
     badge.id = 'totals-badge';
     badge.style.marginLeft = '8px';
-    const exportBtn = $('btn-export');
-    if (exportBtn) exportBtn.after(badge);
+    const btn = document.getElementById('btn-export'); if (btn) btn.after(badge);
   }
-  badge.textContent = `Pakiety: S=${silverSum} | Z=${goldSum}`;
+  badge.textContent = `Pakiety: S=${s} | Z=${g}`;
 }
 
-// --- Edycja pól ---
-document.addEventListener('input', (e) => {
-  const el = e.target;
-  if (!el.matches('input[data-k]')) return;
-  const i = +el.dataset.i, k = el.dataset.k;
+window.renderAll = function(){
   window.state = window.normalizeState(window.state);
-  if (!window.state.rows[i]) return;
-  window.state.rows[i][k] = (el.type==='checkbox') ? el.checked : el.value;
-  window.save();
-  if (k === 'silverPacks' || k === 'goldPacks' || k === 'visible') updateTotalsBadge();
+  renderGroups();
+  renderHeaderToggles();
+  renderRows();
+  rebuildHiddenSelect();
+  updateTotals();
+};
+
+// ===== Persistence =====
+window.save = function(){
+  try {
+    const clean = window.normalizeState(window.state);
+    localStorage.setItem(window.STORAGE_KEY, JSON.stringify(clean));
+    bus.emit('saved', { at: Date.now() });
+  } catch(e){ console.error(e); }
+};
+
+(function boot(){
+  try {
+    const raw = localStorage.getItem(window.STORAGE_KEY);
+    if (raw) window.state = JSON.parse(raw);
+  } catch {}
+  window.state = window.normalizeState(window.state);
+  if (!window.state.rows.length) window.state.rows.push(normalizeRow({ world:'Świat-1', visible:true }));
+  window.renderAll();
+})();
+
+// ===== Interactions =====
+['Event','GPC','NK','WG','Zbiory','Dane'].forEach(key => {
+  const el = document.getElementById(`grp-${key}`);
+  el?.addEventListener('change', () => {
+    window.state.columns[key] = !!el.checked;
+    window.save(); window.renderAll();
+  });
 });
 
-// --- Dodawanie / Usuwanie światów wg pola „Świat” ---
-$('btn-add')?.addEventListener('click', () => {
-  window.state = window.normalizeState(window.state);
-  const world = ($('world-input')?.value || '').trim();
-  const base = { visible: true, world, daily: '', rival: '', plans3: '', taskNo: '', trial:'', resistance:'', end:'',
-    silver:'', silverPacks:'', gold:'', goldPacks:'', nk:'', wg:'', motif:'', pr:'', map:'', era:'' };
-  window.state.rows.push(base);
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (!el.matches('section.row input[data-k]')) return;
+  const sec = el.closest('section.row'); if (!sec) return;
+  const id = sec.dataset.id;
+  const row = window.state.rows.find(r => r.id === id); if (!row) return;
+  const k = el.dataset.k;
+  row[k] = (el.type === 'checkbox') ? el.checked : el.value;
+  if (k === 'visible') { rebuildHiddenSelect(); }
+  if (k === 'silverPacks' || k === 'goldPacks' || k === 'visible') updateTotals();
+  window.save();
+});
+
+document.getElementById('btn-add')?.addEventListener('click', () => {
+  const world = (document.getElementById('world-input')?.value || '').trim();
+  const row = normalizeRow({ world, visible:true });
+  window.state.rows.push(row);
   window.save(); window.renderAll();
 });
 
-$('btn-del')?.addEventListener('click', () => {
-  window.state = window.normalizeState(window.state);
-  const world = ($('world-input')?.value || '').trim();
+document.getElementById('btn-del')?.addEventListener('click', () => {
+  const world = (document.getElementById('world-input')?.value || '').trim();
   if (world){
     const idx = window.state.rows.findIndex(r => (r.world||'').trim() === world);
     if (idx >= 0) window.state.rows.splice(idx, 1);
@@ -138,51 +222,47 @@ $('btn-del')?.addEventListener('click', () => {
   window.save(); window.renderAll();
 });
 
-// --- Ukrywanie przez checkbox + Przywracanie ---
-$('btn-restore')?.addEventListener('click', () => {
-  window.state = window.normalizeState(window.state);
-  const sel = $('hidden-select'); if (!sel) return;
-  const idx = +sel.value;
-  if (!Number.isFinite(idx)) return;
-  if (window.state.rows[idx]) window.state.rows[idx].visible = true;
+document.getElementById('btn-restore')?.addEventListener('click', () => {
+  const sel = document.getElementById('hidden-select'); if (!sel) return;
+  const id = sel.value; if (!id) return;
+  const row = window.state.rows.find(r => r.id === id); if (!row) return;
+  row.visible = true;
   window.save(); window.renderAll();
 });
 
-// --- Bulk apply ---
-$('bulk-apply')?.addEventListener('click', () => {
-  const target = $('bulk-target')?.value;
-  const wgVal  = $('bulk-wg')?.value;
-  const onoff  = $('bulk-onoff')?.value;
-  const text   = $('bulk-text')?.value;
+document.getElementById('bulk-apply')?.addEventListener('click', () => {
+  const target = document.getElementById('bulk-target')?.value;
+  const wgVal  = document.getElementById('bulk-wg')?.value;
+  const onoff  = document.getElementById('bulk-onoff')?.value;
+  const text   = document.getElementById('bulk-text')?.value;
 
-  window.state = window.normalizeState(window.state);
   const rows = window.state.rows.filter(r => r.visible);
 
-  if (target === 'WG'){
-    rows.forEach(r => r.wg = wgVal);
-  } else if (target === 'Motywka'){
-    rows.forEach(r => r.motif = text || '');
-  } else if (target === 'PR'){
-    rows.forEach(r => r.pr = text || '');
-  } else if (target === 'nr zadania'){
-    rows.forEach(r => r.taskNo = text || '');
+  switch (target){
+    case 'WG':
+      rows.forEach(r => r.wg = wgVal);
+      break;
+    case 'Motywka':
+      rows.forEach(r => r.motif = text || '');
+      break;
+    case 'PR':
+      rows.forEach(r => r.pr = text || '');
+      break;
+    case 'nr zadania':
+      rows.forEach(r => r.taskNo = text || '');
+      break;
+    default: break;
   }
   window.save(); window.renderAll();
 });
 
-// --- Save (localStorage) — chmura dopina auth-cloud.js ---
-window.save = function(){
-  try { localStorage.setItem(window.STORAGE_KEY, JSON.stringify(window.normalizeState(window.state))); } catch {}
-};
+document.getElementById('btn-export')?.addEventListener('click', () => {
+  const rows = window.state.rows; if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(',')].concat(rows.map(r => headers.map(h => JSON.stringify(r[h] ?? '')).join(',')));
+  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'planer.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+});
 
-// --- Boot ---
-(function(){
-  try { const raw = localStorage.getItem(window.STORAGE_KEY); if (raw) window.state = JSON.parse(raw); } catch {}
-  window.state = window.normalizeState(window.state);
-  // jeśli nie ma żadnego wiersza — dodaj startowy
-  if (!window.state.rows.length){
-    window.state.rows.push({ visible: true, world: 'Świat-1', daily: '', rival: '', plans3: '', taskNo: '', trial:'', resistance:'', end:'',
-      silver:'', silverPacks:'', gold:'', goldPacks:'', nk:'', wg:'', motif:'', pr:'', map:'', era:'' });
-  }
-  window.renderAll();
-})();
+// ===== End CORE v2 =====
